@@ -5,6 +5,7 @@ from targets import *
 from shared_resource import *
 from predict_affinities import predict_affinities
 from create_segmentations import create_segmentations
+from redirect_output import redirect_output
 
 class TrainTask(luigi.task.ExternalTask):
 
@@ -37,7 +38,8 @@ class ProcessTask(luigi.Task):
 
     def run(self):
         gpu = lock('gpu')
-        predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
+        with redirect_output(self):
+            predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
 class SegmentTask(luigi.Task):
 
@@ -62,4 +64,5 @@ class SegmentTask(luigi.Task):
         return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
 
     def run(self):
-        create_segmentations(self.setup, self.iteration, self.sample, self.augmentation, self.thresholds)
+        with redirect_output(self):
+            create_segmentations(self.setup, self.iteration, self.sample, self.augmentation, self.thresholds)
