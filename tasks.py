@@ -3,52 +3,63 @@ import time
 import random
 from targets import *
 from shared_resource import *
+from predict_affinities import predict_affinities
+from create_segmentations import create_segmentations
+
+class TrainTask(luigi.task.ExternalTask):
+
+    setup = luigi.IntParameter()
+    iteration = luigi.IntParameter()
+
+    def output_filename(self):
+        return '../02_train/setup%02d/net_iter_%d.solverstate'%(self.setup,self.iteration)
+
+    def output(self):
+        return FileTarget(self.output_filename())
 
 class ProcessTask(luigi.Task):
 
     setup = luigi.IntParameter()
+    iteration = luigi.IntParameter()
+    sample = luigi.Parameter()
+    augmentation = luigi.Parameter()
+
     resources = { 'gpu':1 }
 
     def output_filename(self):
-        return 'data/affinities.%d.dat'%self.setup
+        self.augmentation_suffix = ''
+        if self.augmentation is not None:
+            self.augmentation_suffix = '.augmented.%d'%self.augmentation
+        return 'processed/setup%02d/%d/%s_less-padded_20160501%s.hdf'%(self.setup,self.iteration,self.sample,self.augmentation_suffix)
 
     def output(self):
         return FileTarget(self.output_filename())
 
     def run(self):
         gpu = lock('gpu')
-        print('=============== processing with gpu ' + str(gpu.id))
-        time.sleep(10)
-        with open(self.output_filename(), 'w') as f:
-            f.write('initial file')
+        predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
 class SegmentTask(luigi.Task):
 
-    threshold = luigi.IntParameter()
     setup = luigi.IntParameter()
+    iteration = luigi.IntParameter()
+    sample = luigi.Parameter()
+    augmentation = luigi.Parameter()
+    thresholds = luigi.Parameter()
 
-    def output_filename(self):
-        return 'data/affinities.%d.%d.dat'%(self.setup,self.threshold)
+    resources = { 'segment_task_count':1 }
+
+    def output_filename(self, threshold):
+        self.augmentation_suffix = ''
+        if self.augmentation is not None:
+            self.augmentation_suffix = '.augmented.%d'%self.augmentation
+        return 'processed/setup%02d/%d/%s_less-padded_20160501%s.%d.hdf'%(self.setup,self.iteration,self.sample,self.augmentation_suffix,threshold)
 
     def requires(self):
-        return ProcessTask(self.setup)
+        return ProcessTask(self.setup, self.iteration, self.sample, self.augmentation)
 
     def output(self):
-        return FileTarget(self.output_filename())
+        return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
 
     def run(self):
-        print("Starting SegmentTask for threshold " + str(self.threshold) + ", setup " + str(self.setup))
-        random.seed(time.time())
-        if random.random() > 0.5:
-            print("Whoops!")
-            raise RuntimeError("Something went wrong")
-            #return # without producing results
-        time.sleep(2)
-        with open(self.output_filename(), 'w') as f:
-            f.write('done')
-        print("SegmentTask for threshold " + str(self.threshold) + " finished")
-
-class SegmentAllTask(luigi.task.WrapperTask):
-
-    def requires(self):
-        return [ SegmentTask(t,s) for t in range(100, 1000, 100) for s in range(8) ]
+        create_segmentations(self.setup, self.iteration, self.sample, self.augmentation, self.thresholds)
