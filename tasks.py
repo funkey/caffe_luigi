@@ -12,6 +12,8 @@ class TrainTask(luigi.Task):
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
 
+    resources = { 'gpu':1 }
+
     def output_filename(self):
         return '%s/net_iter_%d.solverstate'%(self.setup,self.iteration)
 
@@ -24,8 +26,8 @@ class TrainTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
-        gpu = lock('gpu')
         with redirect_output(self):
+            gpu = lock('gpu')
             os.chdir(self.setup)
             sys.path.append(os.getcwd())
             from train_until import train_until
@@ -53,9 +55,9 @@ class ProcessTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
-        gpu = lock('gpu')
-        from predict_affinities import predict_affinities
         with redirect_output(self):
+            gpu = lock('gpu')
+            from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
 class SegmentTask(luigi.Task):
@@ -94,6 +96,6 @@ class SegmentTask(luigi.Task):
         return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
 
     def run(self):
-        from create_segmentations import create_segmentations
         with redirect_output(self):
+            from create_segmentations import create_segmentations
             create_segmentations(self.get_setup(), self.get_iteration(), self.sample, self.augmentation, self.thresholds)
