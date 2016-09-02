@@ -9,6 +9,7 @@ from targets import *
 
 class TrainTask(luigi.Task):
 
+    experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
 
@@ -35,6 +36,7 @@ class TrainTask(luigi.Task):
 
 class ProcessTask(luigi.Task):
 
+    experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
@@ -62,6 +64,7 @@ class ProcessTask(luigi.Task):
 
 class SegmentTask(luigi.Task):
 
+    experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
