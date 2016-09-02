@@ -21,7 +21,7 @@ class TrainTask(luigi.Task):
     def requires(self):
         if self.iteration == 2000:
             return []
-        return TrainTask(self.setup, self.iteration - 2000)
+        return TrainTask(self.experiment, self.setup, self.iteration - 2000)
 
     def output(self):
         return FileTarget(self.output_filename())
@@ -93,7 +93,7 @@ class SegmentTask(luigi.Task):
         return 'processed/%s/%d/%s_less-padded_20160501%s.%d.hdf'%(self.get_setup(),self.get_iteration(),self.sample,self.augmentation_suffix,threshold)
 
     def requires(self):
-        return ProcessTask(self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
+        return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
 
     def output(self):
         return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
