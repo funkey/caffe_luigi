@@ -7,16 +7,21 @@ from redirect_output import redirect_output
 from shared_resource import *
 from targets import *
 
+base_dir = '.'
+def set_base_dir(d):
+    global base_dir
+    base_dir = d
+
 class TrainTask(luigi.Task):
 
     experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
 
-    resources = { 'gpu':1 }
+    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
     def output_filename(self):
-        return '%s/net_iter_%d.solverstate'%(self.setup,self.iteration)
+        return os.path.join(base_dir, '02_train', str(self.setup), 'net_iter_%d.solverstate'%self.iteration)
 
     def requires(self):
         if self.iteration == 2000:
@@ -28,8 +33,8 @@ class TrainTask(luigi.Task):
 
     def run(self):
         with redirect_output(self):
-            gpu = lock('gpu')
-            os.chdir(self.setup)
+            gpu = lock('gpu_{}'.format(socket.gethostname()))
+            os.chdir(os.path.join(base_dir, '02_train', self.setup))
             sys.path.append(os.getcwd())
             from train_until import train_until
             train_until(self.iteration, gpu.id)
@@ -42,23 +47,23 @@ class ProcessTask(luigi.Task):
     sample = luigi.Parameter()
     augmentation = luigi.Parameter()
 
-    resources = { 'gpu':1 }
+    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
     def output_filename(self):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        return 'processed/%s/%d/%s_less-padded_20160501%s.hdf'%(self.setup,self.iteration,self.sample,self.augmentation_suffix)
+        return os.path.join(base_dir, '03_process_training', 'processed', self.setup, str(self.iteration), '%s_less-padded_20160501%s.hdf'%(self.sample,self.augmentation_suffix))
 
     def requires(self):
-        return TrainTask(self.setup, self.iteration)
+        return TrainTask(self.experiment, self.setup, self.iteration)
 
     def output(self):
         return FileTarget(self.output_filename())
 
     def run(self):
         with redirect_output(self):
-            gpu = lock('gpu')
+            gpu = lock('gpu_{}'.format(socket.gethostname()))
             from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
@@ -81,7 +86,7 @@ class SegmentTask(luigi.Task):
     def get_iteration(self):
         if self.iteration == -1:
             # take the most recent iteration
-            modelfiles = glob.glob('../02_train/%s/net_iter_*.solverstate'%self.get_setup())
+            modelfiles = glob.glob(os.path.join(base_dir, '02_train', str(self.get_setup()), 'net_iter_*.solverstate'))
             iterations = [ int(modelfile.split('_')[-1].split('.')[0]) for modelfile in modelfiles ]
             self.iteration = max(iterations)
         return self.iteration
@@ -90,7 +95,7 @@ class SegmentTask(luigi.Task):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        return 'processed/%s/%d/%s_less-padded_20160501%s.%d.hdf'%(self.get_setup(),self.get_iteration(),self.sample,self.augmentation_suffix,threshold)
+        return os.path.join(base_dir, '03_process_training', 'processed', self.get_setup(), str(self.iteration), '%s_less-padded_20160501%s.%d.hdf'%(self.sample,self.augmentation_suffix,threshold))
 
     def requires(self):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)

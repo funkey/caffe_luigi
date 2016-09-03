@@ -1,8 +1,9 @@
 from contextlib import contextmanager
+import errno
 import fcntl
+import numbers
 import os
 import signal
-import errno
 
 pools = {}
 
@@ -37,16 +38,16 @@ class ResourcePool:
     def resource_dir(self):
         return os.path.join(os.path.expanduser('~'),'.luigi', 'resources', self.name)
 
-    def __init__(self, name, count):
+    def __init__(self, name, instances):
         self.name = name
-        self.count = count
+        self.instances = instances
         if not os.path.isdir(self.resource_dir()):
             os.makedirs(self.resource_dir())
 
     def get(self):
         '''Try to lock a resource and return it.'''
 
-        for i in range(self.count):
+        for i in self.instances:
             with timeout(1):
                 fd = open(os.path.join(self.resource_dir(),str(i)), 'w')
                 try:
@@ -61,10 +62,12 @@ class ResourcePool:
         # no available resource was found
         raise OutOfSharedResources('no more available resource with name ' + self.name)
 
-def register_shared_resource(name, count):
-    '''Register a named resource, of which `count` instances are available.'''
+def register_shared_resource(name, instances):
+    '''Register a named resource, which has the given instances are available.
+
+    The instances have to be convertable to a string, e.g., a list of intergers is fine.'''
     global pools
-    pools[name] = ResourcePool(name, count)
+    pools[name] = ResourcePool(name, instances)
 
 def lock(name):
     '''Attempt to lock a shared resource. On success, a Resource instance is 
