@@ -53,7 +53,11 @@ class ProcessTask(luigi.Task):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        return os.path.join(base_dir, '03_process_training', 'processed', self.setup, str(self.iteration), '%s_less-padded_20160501%s.hdf'%(self.sample,self.augmentation_suffix))
+        if '+' in self.sample:
+            process_dir = '04_process_testing'
+        else:
+            process_dir = '03_process_training'
+        return os.path.join(base_dir, process_dir, 'processed', self.setup, str(self.iteration), '%s%s.hdf'%(self.sample,self.augmentation_suffix))
 
     def requires(self):
         return TrainTask(self.experiment, self.setup, self.iteration)
@@ -74,7 +78,7 @@ class SegmentTask(luigi.Task):
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
     augmentation = luigi.Parameter()
-    thresholds = luigi.Parameter()
+    threshold = luigi.IntParameter()
 
     resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
@@ -95,15 +99,62 @@ class SegmentTask(luigi.Task):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        return os.path.join(base_dir, '03_process_training', 'processed', self.get_setup(), str(self.iteration), '%s_less-padded_20160501%s.%d.hdf'%(self.sample,self.augmentation_suffix,threshold))
+        if '+' in self.sample:
+            process_dir = '04_process_testing'
+        else:
+            process_dir = '03_process_training'
+        return os.path.join(base_dir, process_dir, 'processed', self.get_setup(), str(self.iteration), '%s%s.%d.hdf'%(self.sample,self.augmentation_suffix,threshold))
 
     def requires(self):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
 
     def output(self):
-        return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
+        return FileTarget(self.output_filename(self.threshold))
 
     def run(self):
         with redirect_output(self):
             from create_segmentations import create_segmentations
-            create_segmentations(self.get_setup(), self.get_iteration(), self.sample, self.augmentation, self.thresholds)
+            create_segmentations(self.get_setup(), self.get_iteration(), self.sample, self.augmentation, [self.threshold])
+
+class EvaluateTask(luigi.Task):
+
+    experiment = luigi.Parameter()
+    setup = luigi.Parameter()
+    iteration = luigi.IntParameter()
+    sample = luigi.Parameter()
+    augmentation = luigi.Parameter()
+    threshold = luigi.IntParameter()
+
+    def get_setup(self):
+        if isinstance(self.setup, int):
+            return 'setup%02d'%self.setup
+        return self.setup
+
+    def get_iteration(self):
+        if self.iteration == -1:
+            # take the most recent iteration
+            modelfiles = glob.glob(os.path.join(base_dir, '02_train', str(self.get_setup()), 'net_iter_*.solverstate'))
+            iterations = [ int(modelfile.split('_')[-1].split('.')[0]) for modelfile in modelfiles ]
+            self.iteration = max(iterations)
+        return self.iteration
+
+    def output_filename(self):
+        self.augmentation_suffix = ''
+        if self.augmentation is not None:
+            self.augmentation_suffix = '.augmented.%d'%self.augmentation
+        if '+' in self.sample:
+            process_dir = '04_process_testing'
+        else:
+            process_dir = '03_process_training'
+        return os.path.join(base_dir, process_dir, 'processed', self.get_setup(), str(self.iteration), '%s%s.%d.hdf'%(self.sample,self.augmentation_suffix,self.threshold))
+
+    def requires(self):
+        return SegmentTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation, self.threshold)
+
+    def output(self):
+        return HdfAttributeTarget(self.output_filename(), 'main', 'evaluated')
+
+    def run(self):
+        with redirect_output(self):
+            from evaluate import evaluate
+            evaluate(self.output_filename())
