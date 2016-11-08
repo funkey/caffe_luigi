@@ -112,11 +112,21 @@ class RedirectOutput:
         for fd in self.saved_fds: os.close(fd)
         return False
 
+def luigi_task_name(task):
+
+    family = task.task_family
+    params = task.to_str_params(only_significant=True)
+
+    params_str = '_'.join(params[p] for p in params)
+
+    return '{}_{}'.format(family, params_str)
+
 def redirect_output(task):
     '''Convenience wrapper for luigi tasks.'''
     if not os.path.isdir('log'):
         os.mkdir('log')
+    task_name = luigi_task_name(task)
     return RedirectOutput(
-            os.path.join('log', task.task_id + '.out'),
-            os.path.join('log', task.task_id + '.err')
+            os.path.join('log', task_name + '.out'),
+            os.path.join('log', task_name + '.err')
     )
