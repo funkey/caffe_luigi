@@ -158,3 +158,74 @@ class EvaluateTask(luigi.Task):
         with redirect_output(self):
             from evaluate import evaluate
             evaluate(self.output_filename())
+
+class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
+
+    experiment = luigi.Parameter()
+    setup = luigi.Parameter()
+    iteration = luigi.Parameter()
+
+    samples = luigi.Parameter()
+    augmentations = luigi.Parameter()
+    thresholds = luigi.Parameter()
+
+    def requires(self):
+
+        return [
+            EvaluateTask(
+                experiment=self.experiment,
+                setup=self.setup,
+                iteration=self.iteration,
+                sample=sample,
+                augmentation=augmentation,
+                threshold=threshold)
+            for sample in self.samples
+            for augmentation in self.augmentations
+            for threshold in self.thresholds
+        ]
+
+class EvaluateCompleteSetup(luigi.task.WrapperTask):
+
+    experiment = luigi.Parameter()
+    setup = luigi.Parameter()
+
+    iterations = luigi.Parameter()
+    samples = luigi.Parameter()
+    augmentations = luigi.Parameter()
+    thresholds = luigi.Parameter()
+
+    def requires(self):
+
+        return [
+            EvaluateCompleteSetupIteration(
+                experiment=self.experiment,
+                setup=self.setup,
+                iteration=iteration,
+                samples=self.samples,
+                augmentations=self.augmentations,
+                thresholds=self.thresholds)
+            for iteration in self.iterations
+        ]
+
+class EvaluateAll(luigi.task.WrapperTask):
+
+    experiment = luigi.Parameter()
+
+    setups = luigi.Parameter()
+    iterations = luigi.Parameter()
+    samples = luigi.Parameter()
+    augmentations = luigi.Parameter()
+    thresholds = luigi.Parameter()
+
+    def requires(self):
+
+        return [
+            EvaluateCompleteSetup(
+                experiment=self.experiment,
+                setup=setup,
+                iterations=self.iterations,
+                samples=self.samples,
+                augmentations=self.augmentations,
+                thresholds=self.thresholds)
+            for setup in self.setups
+        ]
