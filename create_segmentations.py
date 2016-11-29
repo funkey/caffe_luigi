@@ -1,11 +1,13 @@
+from scipy import ndimage as ndi
 import h5py
 import json
 import math
 import numpy as np
 import os
 import sys
-import zwatershed as zw
 import time
+import mahotas as mh
+import waterz
 
 def show_stats(v, name):
     print name + ":"
@@ -13,12 +15,55 @@ def show_stats(v, name):
     print "\tdtype :" + str(v.dtype)
 
 def seg_filename(aff_filename, threshold):
-    return aff_filename[:-3] + str(threshold) + ".hdf"
+    threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
+    return aff_filename[:-3] + threshold_string + ".hdf"
 
-def create_watersheds(affs, seg_thresholds, aff_filename):
+def threshold_cc(membrane, threshold):
+
+    thresholded = membrane<=threshold
+    return ndi.label(thresholded)[0]
+
+def create_boundary_map_watersheds(affs, seg_thresholds):
+
+    # pixel-wise predictions = average of x and y affinity
+    print "Computing membrane map"
+    #membrane = 1.0 - (affs[0] + affs[1] + affs[2])/3
+    membrane = 1.0 - (affs[1] + affs[2])/2
+
+    segs = []
+    for t in seg_thresholds:
+
+        print "Processing threshold " + str(t)
+
+        print "Finding initial seeds"
+        seeds = threshold_cc(membrane, t)
+
+        print "Watershedding"
+        #segs.append(seeds)
+        segs.append(np.array(mh.cwatershed(membrane, seeds), dtype=np.uint64))
+
+    return segs
+
+def create_boundary_thresholds(affs, seg_thresholds):
+
+    # pixel-wise predictions = average of x and y affinity
+    print "Computing membrane map"
+    membrane = (affs[1,1:,1:,1:] + affs[2,1:,1:,1:])*0.5
+
+    segs = []
+    for t in seg_thresholds:
+
+        segs.append(threshold_cc(membrane, t))
+
+    return segs
+
+def create_watersheds(affs, seg_thresholds, aff_filename, treat_as_boundary_map = False):
 
     print "Computing watersheds"
-    segs = zw.zwatershed(affs, seg_thresholds)
+    if treat_as_boundary_map:
+        segs = create_boundary_map_watersheds(affs, seg_thresholds)
+    else:
+        segs = waterz.agglomerate(affs, seg_thresholds)
 
     for i in range(len(seg_thresholds)):
         t = seg_thresholds[i]
@@ -61,7 +106,7 @@ def is_testing_sample(sample):
         return True
     return False
 
-def create_segmentations(setup, iteration, sample, augmentation, seg_thresholds):
+def create_segmentations(setup, iteration, sample, augmentation, seg_thresholds, treat_as_boundary_map = False):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
@@ -98,7 +143,7 @@ def create_segmentations(setup, iteration, sample, augmentation, seg_thresholds)
     affs = crop(affs, bb)
 
     print "Copying affs to memory..."
-    # for zwatershed...
+    # for waterz
     affs = np.array(affs)
     orig_file.close()
     aff_file.close()
@@ -106,7 +151,7 @@ def create_segmentations(setup, iteration, sample, augmentation, seg_thresholds)
 
     start = time.time()
     print "Getting segmentations for " + augmentation_name
-    segs = create_watersheds(affs, seg_thresholds, aff_filename)
+    segs = create_watersheds(affs, seg_thresholds, aff_filename, treat_as_boundary_map)
     print "Finished watershed in " + str(time.time() - start) + "s"
 
     print "sample    : " + sample
@@ -124,4 +169,4 @@ if __name__ == "__main__":
 
     # NOTE: this is for debugging, normally create_segmentations is called by 
     # luigi
-    create_segmentations('setup26', 100000, 'sample_B', '0', [50000])
+    create_segmentations('setup26', 100000, 'sample_B', '0', [0, 0.1, 0.3, 0.5, 0.7], treat_as_boundary_map = True)
