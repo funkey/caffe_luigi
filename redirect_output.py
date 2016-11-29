@@ -126,7 +126,10 @@ def redirect_output(task):
     if not os.path.isdir('log'):
         os.mkdir('log')
     task_name = luigi_task_name(task)
+    task_hash = hex(abs(hash(task_name)))[2:]
+    log_base_name = task.task_family + "_" + task_hash
+    print("Logging " + task_name + " to " + log_base_name + ".{out,err}")
     return RedirectOutput(
-            os.path.join('log', task_name + '.out'),
-            os.path.join('log', task_name + '.err')
+            os.path.join('log', log_base_name + '.out'),
+            os.path.join('log', log_base_name + '.err')
     )
