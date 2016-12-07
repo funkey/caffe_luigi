@@ -32,7 +32,8 @@ class TrainTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
-        with redirect_output(self):
+        log_base = os.path.join(base_dir, '02_train', str(self.setup), 'train_%d'%self.iteration)
+        with RedirectOutput(log_base + '.out', log_base + '.err'):
             gpu = lock('gpu_{}'.format(socket.gethostname()))
             os.chdir(os.path.join(base_dir, '02_train', self.setup))
             sys.path.append(os.getcwd())
