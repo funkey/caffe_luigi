@@ -215,6 +215,17 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
 
     tag = luigi.Parameter()
 
+    @property
+    def priority(self):
+        # process largely spaced iterations first
+        if self.iteration % 100000 == 0:
+            return 10
+        elif self.iteration % 50000 == 0:
+            return 5
+        elif self.iteration % 10000 == 0:
+            return 3
+        return 0
+
     def requires(self):
 
         return [
