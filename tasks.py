@@ -3,7 +3,7 @@ import luigi
 import os
 import socket
 import sys
-from redirect_output import redirect_output
+from redirect_output import *
 from shared_resource import *
 from targets import *
 
@@ -79,6 +79,7 @@ class SegmentTask(luigi.Task):
     sample = luigi.Parameter()
     augmentation = luigi.Parameter()
     thresholds = luigi.Parameter()
+    tag = luigi.Parameter()
     as_boundary_map = luigi.BoolParameter()
 
     resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
@@ -105,7 +106,16 @@ class SegmentTask(luigi.Task):
         else:
             process_dir = '03_process_training'
         threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
-        return os.path.join(base_dir, process_dir, 'processed', self.get_setup(), str(self.iteration), '%s%s.%s.hdf'%(self.sample,self.augmentation_suffix,threshold_string))
+        tag_string = ''
+        if self.tag is not None:
+            tag_string = '.' + self.tag
+        return os.path.join(
+                base_dir,
+                process_dir,
+                'processed',
+                self.get_setup(),
+                str(self.iteration),
+                '%s%s.%s%s.hdf'%(self.sample,self.augmentation_suffix,threshold_string,tag_string))
 
     def requires(self):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
@@ -116,7 +126,15 @@ class SegmentTask(luigi.Task):
     def run(self):
         with redirect_output(self):
             from create_segmentations import create_segmentations
-            create_segmentations(self.get_setup(), self.get_iteration(), self.sample, self.augmentation, self.thresholds, treat_as_boundary_map = self.as_boundary_map)
+            create_segmentations(
+                    self.setup,
+                    self.iteration,
+                    self.sample,
+                    self.augmentation,
+                    self.thresholds,
+                    [self.output_filename(t) for t in self.thresholds],
+                    self.as_boundary_map,
+                    tag=self.tag)
 
 class EvaluateTask(luigi.Task):
 

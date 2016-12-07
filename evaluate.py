@@ -74,7 +74,7 @@ def is_testing_sample(sample):
         return True
     return False
 
-def evaluate(setup, iteration, sample, augmentation, seg_thresholds, record_files, treat_as_boundary_map = False, tag = None):
+def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_files, treat_as_boundary_map = False, tag = None, keep_segmentation = False):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
@@ -135,36 +135,47 @@ def evaluate(setup, iteration, sample, augmentation, seg_thresholds, record_file
     i = 0
     for seg_metric in create_watersheds(affs, gt_with_borders, seg_thresholds, treat_as_boundary_map):
 
-        print "Storing record..."
+        output_file = output_files[i]
 
-        metrics = seg_metric[1]
-        threshold = seg_thresholds[i]
-        record_file = record_files[i]
-        i += 1
+        if keep_segmentation:
 
-        print seg_metric
-        print metrics
+            print "Storing segmentation..."
 
-        record = {
-            'setup': setup,
-            'iteration': iteration,
-            'sample': sample,
-            'augmentation': augmentation,
-            'threshold': threshold,
-            'tag': 'waterz',
-            'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
-            'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
-            'affinities': { 'filename': aff_filename, 'dataset': 'main' },
-            'voi_split': metrics['V_Info_split'],
-            'voi_merge': metrics['V_Info_merge'],
-            'rand_split': metrics['V_Rand_split'],
-            'rand_merge': metrics['V_Rand_merge'],
-            'gt_border_threshold': neuron_ids_border_threshold
-        }
-        with open(record_file, 'w') as f:
-            json.dump(record, f)
+            seg = seg_metric[0]
+            h5py.File(output_file, 'w')['main'] = seg
 
-    print "Finished waterzed in " + str(time.time() - start) + "s"
+        else:
+
+            print "Storing record..."
+
+            metrics = seg_metric[1]
+            threshold = seg_thresholds[i]
+            i += 1
+
+            print seg_metric
+            print metrics
+
+            record = {
+                'setup': setup,
+                'iteration': iteration,
+                'sample': sample,
+                'augmentation': augmentation,
+                'threshold': threshold,
+                'tag': 'waterz',
+                'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
+                'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
+                'affinities': { 'filename': aff_filename, 'dataset': 'main' },
+                'voi_split': metrics['V_Info_split'],
+                'voi_merge': metrics['V_Info_merge'],
+                'rand_split': metrics['V_Rand_split'],
+                'rand_merge': metrics['V_Rand_merge'],
+                'gt_border_threshold': neuron_ids_border_threshold
+            }
+            with open(output_file, 'w') as f:
+                json.dump(record, f)
+
+
+    print "Finished waterz in " + str(time.time() - start) + "s"
 
 if __name__ == "__main__":
 
