@@ -167,7 +167,7 @@ def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_file
                 'sample': sample,
                 'augmentation': augmentation,
                 'threshold': threshold,
-                'tag': 'waterz',
+                'tag': tag,
                 'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
                 'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
                 'affinities': { 'filename': aff_filename, 'dataset': 'main' },
