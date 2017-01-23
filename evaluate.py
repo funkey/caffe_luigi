@@ -8,7 +8,6 @@ import numpy as np
 import os
 import time
 import waterz
-import waterz_aff_squared
 
 # in nm, equivalent to CREMI metric
 neuron_ids_border_threshold = 25
@@ -46,11 +45,13 @@ def create_watersheds(affs, gt, seg_thresholds, treat_as_boundary_map = False, t
         return create_boundary_map_watersheds(affs, seg_thresholds)
     else:
         if tag == 'waterz_aff_squared':
-            # aff_squared scoring function produces much higher values
-            scaled_thresholds = [ 100*t for t in seg_thresholds ]
-            return waterz_aff_squared.agglomerate(affs, scaled_thresholds, gt)
+            scoring_function = 'Divide<MinSize<SizesType>, Square<MaxAffinity<AffinitiesType>>>'
+        elif tag == 'waterz_median_aff':
+            scoring_function = 'OneMinus<MedianAffinity<AffinitiesType>>'
         else:
-            return waterz.agglomerate(affs, seg_thresholds, gt)
+            scoring_function = 'Multiply<OneMinus<MaxAffinity<AffinitiesType>>, MinSize<SizesType>>'
+
+        return waterz.agglomerate(affs, seg_thresholds, gt, scoring_function=scoring_function)
 
 def crop(a, bb):
 

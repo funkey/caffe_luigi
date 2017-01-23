@@ -194,7 +194,7 @@ class EvaluateTask(luigi.Task):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
 
     def output(self):
-        return [ JsonTarget(self.output_filename(t), 'tag', 'waterz') for t in self.thresholds ]
+        return [ JsonTarget(self.output_filename(t), 'tag', self.tag) for t in self.thresholds ]
 
     def run(self):
         with redirect_output(self):
