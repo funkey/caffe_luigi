@@ -50,15 +50,17 @@ class ProcessTask(luigi.Task):
 
     resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
+    def process_dir(self):
+        if '+' in self.sample:
+            return '04_process_testing'
+        else:
+            return '03_process_training'
+
     def output_filename(self):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        if '+' in self.sample:
-            process_dir = '04_process_testing'
-        else:
-            process_dir = '03_process_training'
-        return os.path.join(base_dir, process_dir, 'processed', self.setup, str(self.iteration), '%s%s.hdf'%(self.sample,self.augmentation_suffix))
+        return os.path.join(base_dir, self.process_dir(), 'processed', self.setup, str(self.iteration), '%s%s.hdf'%(self.sample,self.augmentation_suffix))
 
     def requires(self):
         return TrainTask(self.experiment, self.setup, self.iteration)
@@ -67,7 +69,8 @@ class ProcessTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
-        with redirect_output(self):
+        log_base = os.path.join(base_dir, self.process_dir(), 'processed', self.setup, str(self.iteration), '%s%s'%(self.sample,self.augmentation_suffix))
+        with RedirectOutput(log_base + '.out', log_base + '.err'):
             gpu = lock('gpu_{}'.format(socket.gethostname()))
             from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
@@ -98,21 +101,23 @@ class SegmentTask(luigi.Task):
             self.iteration = max(iterations)
         return self.iteration
 
+    def process_dir(self):
+        if '+' in self.sample:
+            return '04_process_testing'
+        else:
+            return '03_process_training'
+
     def output_filename(self, threshold):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        if '+' in self.sample:
-            process_dir = '04_process_testing'
-        else:
-            process_dir = '03_process_training'
         threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
         tag_string = ''
         if self.tag is not None:
             tag_string = '.' + self.tag
         return os.path.join(
                 base_dir,
-                process_dir,
+                self.process_dir(),
                 'processed',
                 self.get_setup(),
                 str(self.iteration),
@@ -163,21 +168,23 @@ class EvaluateTask(luigi.Task):
             self.iteration = max(iterations)
         return self.iteration
 
+    def process_dir(self):
+        if '+' in self.sample:
+            return '04_process_testing'
+        else:
+            return '03_process_training'
+
     def output_filename(self, threshold):
         self.augmentation_suffix = ''
         if self.augmentation is not None:
             self.augmentation_suffix = '.%d'%self.augmentation
-        if '+' in self.sample:
-            process_dir = '04_process_testing'
-        else:
-            process_dir = '03_process_training'
         threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
         tag_string = ''
         if self.tag is not None:
             tag_string = '.' + self.tag
         return os.path.join(
                 base_dir,
-                process_dir,
+                self.process_dir(),
                 'processed',
                 self.get_setup(),
                 str(self.iteration),
