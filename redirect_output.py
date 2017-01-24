@@ -87,6 +87,15 @@ class RedirectOutput:
         # flush any pending output
         for s in saved_streams: s.flush()
 
+        # ensure output directories exist
+        for f in self.outfiles:
+            log_dir = os.path.dirname(f)
+            try:
+                os.makedirs(log_dir)
+            except:
+                # might exist already
+                pass
+
         # open surrogate files
         if self.combine: 
             null_streams = [open(self.outfiles[0], self.mode, 0)] * 2
