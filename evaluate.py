@@ -48,6 +48,8 @@ def create_watersheds(affs, gt, seg_thresholds, treat_as_boundary_map = False, t
             scoring_function = 'Divide<MinSize<SizesType>, Square<MaxAffinity<AffinitiesType>>>'
         elif tag == 'waterz_median_aff':
             scoring_function = 'OneMinus<MedianAffinity<AffinitiesType>>'
+        elif tag == 'waterz_85_aff':
+            scoring_function = 'OneMinus<QuantileAffinity<AffinitiesType,85>>'
         else:
             scoring_function = 'Multiply<OneMinus<MaxAffinity<AffinitiesType>>, MinSize<SizesType>>'
 
