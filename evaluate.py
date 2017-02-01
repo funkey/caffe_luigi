@@ -83,7 +83,17 @@ def is_testing_sample(sample):
         return True
     return False
 
-def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_files, treat_as_boundary_map = False, tag = None, keep_segmentation = False):
+def evaluate(
+        setup,
+        iteration,
+        sample,
+        augmentation,
+        seg_thresholds,
+        output_files,
+        treat_as_boundary_map = False,
+        tag = None,
+        mask_affs = False,
+        keep_segmentation = False):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
@@ -121,7 +131,8 @@ def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_file
     gt_volume.data = crop(gt_volume.data, bb)
 
     print "Growing ground-thruth boundary..."
-    gt_volume.data[gt_volume.data>=np.uint64(-10)] = -1
+    no_gt = gt_volume.data>=np.uint64(-10)
+    gt_volume.data[no_gt] = -1
     print("GT min/max: " + str(gt_volume.data.min()) + "/" + str(gt_volume.data.max()))
     evaluate = cremi.evaluation.NeuronIds(gt_volume, border_threshold=neuron_ids_border_threshold)
     gt_with_borders = np.array(evaluate.gt, dtype=np.uint32)
@@ -138,6 +149,11 @@ def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_file
     # for waterz
     affs = np.array(affs)
     aff_file.close()
+
+    if mask_affs:
+        print "Masking affinities outside ground-truth..."
+        for d in range(3):
+            affs[d][no_gt] = 0
 
     start = time.time()
 
@@ -171,6 +187,7 @@ def evaluate(setup, iteration, sample, augmentation, seg_thresholds, output_file
                 'augmentation': augmentation,
                 'threshold': threshold,
                 'tag': tag,
+                'mask_affs': mask_affs,
                 'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
                 'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
                 'affinities': { 'filename': aff_filename, 'dataset': 'main' },

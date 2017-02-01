@@ -152,6 +152,7 @@ class EvaluateTask(luigi.Task):
     thresholds = luigi.Parameter()
     tag = luigi.Parameter()
     as_boundary_map = luigi.BoolParameter()
+    mask_affs = luigi.BoolParameter()
 
     resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
@@ -182,6 +183,8 @@ class EvaluateTask(luigi.Task):
         tag_string = ''
         if self.tag is not None:
             tag_string = '.' + self.tag
+        if self.mask_affs == True:
+            tag_string += '.mask_affs'
         return os.path.join(
                 base_dir,
                 self.process_dir(),
@@ -207,7 +210,8 @@ class EvaluateTask(luigi.Task):
                     self.thresholds,
                     [self.output_filename(t) for t in self.thresholds],
                     self.as_boundary_map,
-                    tag=self.tag)
+                    tag=self.tag,
+                    mask_affs=self.mask_affs)
 
 class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
 
@@ -219,6 +223,7 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
     augmentations = luigi.Parameter()
     thresholds = luigi.Parameter()
     as_boundary_map = luigi.BoolParameter()
+    mask_affs = luigi.BoolParameter()
 
     tag = luigi.Parameter()
 
@@ -244,7 +249,8 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
                 augmentation=augmentation,
                 thresholds=self.thresholds,
                 as_boundary_map=self.as_boundary_map,
-                tag=self.tag)
+                tag=self.tag,
+                mask_affs=self.mask_affs)
             for sample in self.samples
             for augmentation in self.augmentations
         ]
@@ -259,6 +265,7 @@ class EvaluateCompleteSetup(luigi.task.WrapperTask):
     augmentations = luigi.Parameter()
     thresholds = luigi.Parameter()
     as_boundary_map = luigi.BoolParameter()
+    mask_affs = luigi.BoolParameter()
 
     tag = luigi.Parameter()
 
@@ -273,7 +280,8 @@ class EvaluateCompleteSetup(luigi.task.WrapperTask):
                 augmentations=self.augmentations,
                 thresholds=self.thresholds,
                 as_boundary_map=self.as_boundary_map,
-                tag=self.tag)
+                tag=self.tag,
+                mask_affs=self.mask_affs)
             for iteration in self.iterations
         ]
 
@@ -287,6 +295,7 @@ class EvaluateAll(luigi.task.WrapperTask):
     augmentations = luigi.Parameter()
     thresholds = luigi.Parameter()
     as_boundary_map = luigi.BoolParameter()
+    mask_affs = luigi.BoolParameter()
 
     tag = luigi.Parameter()
 
@@ -301,6 +310,7 @@ class EvaluateAll(luigi.task.WrapperTask):
                 augmentations=self.augmentations,
                 thresholds=self.thresholds,
                 as_boundary_map=self.as_boundary_map,
-                tag=self.tag)
+                tag=self.tag,
+                mask_affs=self.mask_affs)
             for setup in self.setups
         ]
