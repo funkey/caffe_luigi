@@ -75,84 +75,21 @@ class ProcessTask(luigi.Task):
             from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
-class SegmentTask(luigi.Task):
-
-    experiment = luigi.Parameter()
-    setup = luigi.Parameter()
-    iteration = luigi.IntParameter()
-    sample = luigi.Parameter()
-    augmentation = luigi.Parameter()
-    thresholds = luigi.Parameter()
-    tag = luigi.Parameter()
-    as_boundary_map = luigi.BoolParameter()
-
-    resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
-
-    def get_setup(self):
-        if isinstance(self.setup, int):
-            return 'setup%02d'%self.setup
-        return self.setup
-
-    def get_iteration(self):
-        if self.iteration == -1:
-            # take the most recent iteration
-            modelfiles = glob.glob(os.path.join(base_dir, '02_train', str(self.get_setup()), 'net_iter_*.solverstate'))
-            iterations = [ int(modelfile.split('_')[-1].split('.')[0]) for modelfile in modelfiles ]
-            self.iteration = max(iterations)
-        return self.iteration
-
-    def process_dir(self):
-        if '+' in self.sample:
-            return '04_process_testing'
-        else:
-            return '03_process_training'
-
-    def output_filename(self, threshold):
-        self.augmentation_suffix = ''
-        if self.augmentation is not None:
-            self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
-        tag_string = ''
-        if self.tag is not None:
-            tag_string = '.' + self.tag
-        return os.path.join(
-                base_dir,
-                self.process_dir(),
-                'processed',
-                self.get_setup(),
-                str(self.iteration),
-                '%s%s.%s%s.hdf'%(self.sample,self.augmentation_suffix,threshold_string,tag_string))
-
-    def requires(self):
-        return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
-
-    def output(self):
-        return [ FileTarget(self.output_filename(t)) for t in self.thresholds ]
-
-    def run(self):
-        with redirect_output(self):
-            from create_segmentations import create_segmentations
-            create_segmentations(
-                    self.setup,
-                    self.iteration,
-                    self.sample,
-                    self.augmentation,
-                    self.thresholds,
-                    [self.output_filename(t) for t in self.thresholds],
-                    self.as_boundary_map,
-                    tag=self.tag)
-
 class EvaluateTask(luigi.Task):
 
-    experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
     augmentation = luigi.Parameter()
+
+    experiment = luigi.Parameter()
     thresholds = luigi.Parameter()
-    tag = luigi.Parameter()
-    as_boundary_map = luigi.BoolParameter()
-    mask_affs = luigi.BoolParameter()
+    custom_fragments = luigi.BoolParameter()
+    histogram_quantiles = luigi.BoolParameter()
+    discrete_queue = luigi.BoolParameter()
+    merge_function = luigi.Parameter()
+
+    keep_segmentation = luigi.BoolParameter()
 
     resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
@@ -175,57 +112,64 @@ class EvaluateTask(luigi.Task):
         else:
             return '03_process_training'
 
-    def output_filename(self, threshold):
-        self.augmentation_suffix = ''
+    def tag(self):
+        tag = self.sample + '_' + self.merge_function
+        if self.custom_fragments:
+            tag += '_cf'
+        if self.histogram_quantiles:
+            tag += '_hq'
+        if self.discrete_queue:
+            tag += '_dq'
         if self.augmentation is not None:
-            self.augmentation_suffix = '.%d'%self.augmentation
-        threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
-        tag_string = ''
-        if self.tag is not None:
-            tag_string = '.' + self.tag
-        if self.mask_affs == True:
-            tag_string += '.mask_affs'
+            tag += '_au%d'%self.augmentation
+        return tag
+
+    def output_basename(self, threshold=None):
+
+        threshold_string = ''
+        if threshold is not None:
+            threshold_string = ('%f'%threshold).rstrip('0').rstrip('.')
+        basename = self.tag() + threshold_string
+
         return os.path.join(
                 base_dir,
                 self.process_dir(),
                 'processed',
                 self.get_setup(),
                 str(self.iteration),
-                '%s%s.%s%s.json'%(self.sample,self.augmentation_suffix,threshold_string,tag_string))
+                basename)
 
     def requires(self):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
 
     def output(self):
-        return [ JsonTarget(self.output_filename(t), 'tag', self.tag) for t in self.thresholds ]
+        json_targets = [ JsonTarget(self.output_basename(t) + '.json', 'tag', self.tag) for t in self.thresholds ]
+        if self.keep_segmentation:
+            segmentation_targets = [ FileTarget(self.output_basename(t) + '.hdf') for t in self.thresholds ]
 
     def run(self):
-        with redirect_output(self):
+        with RedirectOutput(self.output_basename() + '.out', self.output_basename() + '.err'):
             from evaluate import evaluate
             evaluate(
-                    self.setup,
-                    self.iteration,
-                    self.sample,
-                    self.augmentation,
-                    self.thresholds,
-                    [self.output_filename(t) for t in self.thresholds],
-                    self.as_boundary_map,
-                    tag=self.tag,
-                    mask_affs=self.mask_affs)
+                    setup=self.setup,
+                    iteration=self.iteration,
+                    sample=self.sample,
+                    augmentation=self.augmentation,
+                    thresholds=self.thresholds,
+                    output_basenames=[self.output_basename(t) for t in self.thresholds],
+                    custom_fragments=self.custom_fragments,
+                    histogram_quantiles=self.histogram_quantiles,
+                    discrete_queue=self.discrete_queue,
+                    merge_function=self.merge_function,
+                    keep_segmentation=self.keep_segmentation)
 
 class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
 
-    experiment = luigi.Parameter()
     setup = luigi.Parameter()
     iteration = luigi.Parameter()
-
     samples = luigi.Parameter()
     augmentations = luigi.Parameter()
-    thresholds = luigi.Parameter()
-    as_boundary_map = luigi.BoolParameter()
-    mask_affs = luigi.BoolParameter()
-
-    tag = luigi.Parameter()
+    parameters = luigi.Parameter()
 
     @property
     def priority(self):
@@ -242,75 +186,51 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
 
         return [
             EvaluateTask(
-                experiment=self.experiment,
                 setup=self.setup,
                 iteration=self.iteration,
                 sample=sample,
                 augmentation=augmentation,
-                thresholds=self.thresholds,
-                as_boundary_map=self.as_boundary_map,
-                tag=self.tag,
-                mask_affs=self.mask_affs)
+                **self.parameters)
             for sample in self.samples
             for augmentation in self.augmentations
         ]
 
 class EvaluateCompleteSetup(luigi.task.WrapperTask):
 
-    experiment = luigi.Parameter()
     setup = luigi.Parameter()
-
     iterations = luigi.Parameter()
     samples = luigi.Parameter()
     augmentations = luigi.Parameter()
-    thresholds = luigi.Parameter()
-    as_boundary_map = luigi.BoolParameter()
-    mask_affs = luigi.BoolParameter()
-
-    tag = luigi.Parameter()
+    parameters = luigi.Parameter()
 
     def requires(self):
 
         return [
             EvaluateCompleteSetupIteration(
-                experiment=self.experiment,
                 setup=self.setup,
                 iteration=iteration,
                 samples=self.samples,
                 augmentations=self.augmentations,
-                thresholds=self.thresholds,
-                as_boundary_map=self.as_boundary_map,
-                tag=self.tag,
-                mask_affs=self.mask_affs)
+                parameters=self.parameters)
             for iteration in self.iterations
         ]
 
 class EvaluateAll(luigi.task.WrapperTask):
 
-    experiment = luigi.Parameter()
-
     setups = luigi.Parameter()
     iterations = luigi.Parameter()
     samples = luigi.Parameter()
     augmentations = luigi.Parameter()
-    thresholds = luigi.Parameter()
-    as_boundary_map = luigi.BoolParameter()
-    mask_affs = luigi.BoolParameter()
-
-    tag = luigi.Parameter()
+    parameters = luigi.Parameter()
 
     def requires(self):
 
         return [
             EvaluateCompleteSetup(
-                experiment=self.experiment,
                 setup=setup,
                 iterations=self.iterations,
                 samples=self.samples,
                 augmentations=self.augmentations,
-                thresholds=self.thresholds,
-                as_boundary_map=self.as_boundary_map,
-                tag=self.tag,
-                mask_affs=self.mask_affs)
+                parameters=self.parameters)
             for setup in self.setups
         ]

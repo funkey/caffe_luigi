@@ -1,59 +1,14 @@
-from itertools import izip
-from scipy import ndimage as ndi
 import cremi
 import h5py
 import json
-import mahotas as mh
 import numpy as np
 import os
 import time
 import waterz
+from agglomerate import agglomerate
 
 # in nm, equivalent to CREMI metric
 neuron_ids_border_threshold = 25
-
-def threshold_cc(membrane, threshold):
-
-    thresholded = membrane<=threshold
-    return ndi.label(thresholded)[0]
-
-def create_boundary_map_watersheds(affs, seg_thresholds):
-
-    # pixel-wise predictions = average of x and y affinity
-    print "Computing membrane map"
-    #membrane = 1.0 - (affs[0] + affs[1] + affs[2])/3
-    membrane = 1.0 - (affs[1] + affs[2])/2
-
-    segs = []
-    for t in seg_thresholds:
-
-        print "Processing threshold " + str(t)
-
-        print "Finding initial seeds"
-        seeds = threshold_cc(membrane, t)
-
-        print "Watershedding"
-        #segs.append(seeds)
-        segs.append(np.array(mh.cwatershed(membrane, seeds), dtype=np.uint64))
-
-    return segs
-
-def create_watersheds(affs, gt, seg_thresholds, treat_as_boundary_map = False, tag = None):
-
-    print "Computing watersheds"
-    if treat_as_boundary_map:
-        return create_boundary_map_watersheds(affs, seg_thresholds)
-    else:
-        if tag == 'waterz_aff_squared':
-            scoring_function = 'Divide<MinSize<SizesType>, Square<MaxAffinity<AffinitiesType>>>'
-        elif tag == 'waterz_median_aff':
-            scoring_function = 'OneMinus<MedianAffinity<AffinitiesType>>'
-        elif tag == 'waterz_85_aff':
-            scoring_function = 'OneMinus<QuantileAffinity<AffinitiesType,85>>'
-        else:
-            scoring_function = 'Multiply<OneMinus<MaxAffinity<AffinitiesType>>, MinSize<SizesType>>'
-
-        return waterz.agglomerate(affs, seg_thresholds, gt, scoring_function=scoring_function)
 
 def crop(a, bb):
 
@@ -88,17 +43,18 @@ def evaluate(
         iteration,
         sample,
         augmentation,
-        seg_thresholds,
-        output_files,
-        treat_as_boundary_map = False,
-        tag = None,
-        mask_affs = False,
+        thresholds,
+        output_basenames,
+        custom_fragments,
+        histogram_quantiles,
+        discrete_queue,
+        merge_function = None,
         keep_segmentation = False):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
 
-    seg_thresholds = list(seg_thresholds)
+    thresholds = list(thresholds)
 
     augmentation_name = sample
     if augmentation is not None:
@@ -107,7 +63,7 @@ def evaluate(
     aff_data_dir = os.path.join(os.getcwd(), 'processed', setup, str(iteration))
     aff_filename = os.path.join(aff_data_dir, augmentation_name + ".hdf")
 
-    print "Evaluating " + sample + " with " + setup + ", iteration " + str(iteration) + " at thresholds " + str(seg_thresholds)
+    print "Evaluating " + sample + " with " + setup + ", iteration " + str(iteration) + " at thresholds " + str(thresholds)
 
     print "Reading ground truth..."
     if is_testing_sample(sample):
@@ -150,59 +106,62 @@ def evaluate(
     affs = np.array(affs)
     aff_file.close()
 
-    if mask_affs:
-        print "Masking affinities outside ground-truth..."
-        for d in range(3):
-            affs[d][no_gt] = 0
+    print "Masking affinities outside ground-truth..."
+    for d in range(3):
+        affs[d][no_gt] = 0
 
     start = time.time()
 
     i = 0
-    for seg_metric in create_watersheds(affs, gt_with_borders, seg_thresholds, treat_as_boundary_map, tag=tag):
+    for seg_metric in agglomerate(
+            affs,
+            gt_with_borders,
+            thresholds,
+            custom_fragments=custom_fragments,
+            histogram_quantiles=histogram_quantiles,
+            discrete_queue=discrete_queue,
+            merge_function=merge_function):
 
-        output_file = output_files[i]
+        output_basename = output_basenames[i]
 
         if keep_segmentation:
 
             print "Storing segmentation..."
 
             seg = seg_metric[0]
-            h5py.File(output_file, 'w')['main'] = seg
+            h5py.File(output_basename + '.hdf', 'w')['main'] = seg
 
-        else:
+        print "Storing record..."
 
-            print "Storing record..."
+        metrics = seg_metric[1]
+        threshold = thresholds[i]
+        i += 1
 
-            metrics = seg_metric[1]
-            threshold = seg_thresholds[i]
-            i += 1
+        print seg_metric
+        print metrics
 
-            print seg_metric
-            print metrics
-
-            record = {
-                'setup': setup,
-                'iteration': iteration,
-                'sample': sample,
-                'augmentation': augmentation,
-                'threshold': threshold,
-                'tag': tag,
-                'mask_affs': mask_affs,
-                'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
-                'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
-                'affinities': { 'filename': aff_filename, 'dataset': 'main' },
-                'voi_split': metrics['V_Info_split'],
-                'voi_merge': metrics['V_Info_merge'],
-                'rand_split': metrics['V_Rand_split'],
-                'rand_merge': metrics['V_Rand_merge'],
-                'gt_border_threshold': neuron_ids_border_threshold
-            }
-            with open(output_file, 'w') as f:
-                json.dump(record, f)
+        record = {
+            'setup': setup,
+            'iteration': iteration,
+            'sample': sample,
+            'augmentation': augmentation,
+            'threshold': threshold,
+            'merge_function': merge_function,
+            'custom_fragments': custom_fragments,
+            'histogram_quantiles': histogram_quantiles,
+            'discrete_queue': discrete_queue,
+            'raw': { 'filename': orig_filename, 'dataset': 'volumes/raw' },
+            'gt': { 'filename': orig_filename, 'dataset': 'volumes/labels/gt' },
+            'affinities': { 'filename': aff_filename, 'dataset': 'main' },
+            'voi_split': metrics['V_Info_split'],
+            'voi_merge': metrics['V_Info_merge'],
+            'rand_split': metrics['V_Rand_split'],
+            'rand_merge': metrics['V_Rand_merge'],
+            'gt_border_threshold': neuron_ids_border_threshold,
+            'waterz_version': waterz.__version__,
+        }
+        with open(output_basename + '.json', 'w') as f:
+            json.dump(record, f)
 
 
     print "Finished waterz in " + str(time.time() - start) + "s"
-
-if __name__ == "__main__":
-
-    evaluate('setup26', 200000, 'sample_A', 0, [100,200], ['test1.json', 'test2.json'], treat_as_boundary_map = False)
