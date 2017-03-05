@@ -2,6 +2,7 @@ import cremi
 import h5py
 import json
 import numpy as np
+from scipy.ndimage import binary_erosion
 import os
 import time
 import waterz
@@ -49,6 +50,7 @@ def evaluate(
         histogram_quantiles,
         discrete_queue,
         merge_function = None,
+        dilate_mask = 0,
         keep_segmentation = False):
 
     if isinstance(setup, int):
@@ -106,6 +108,11 @@ def evaluate(
     affs = np.array(affs)
     aff_file.close()
 
+    if dilate_mask != 0:
+        print "Dilating GT mask..."
+        # in fact, we erode the no-GT mask
+        no_gt = binary_erosion(no_gt, iterations=dilate_mask, border_value=True)
+
     print "Masking affinities outside ground-truth..."
     for d in range(3):
         affs[d][no_gt] = 0
@@ -147,6 +154,7 @@ def evaluate(
             'augmentation': augmentation,
             'threshold': threshold,
             'merge_function': merge_function,
+            'dilate_mask': dilate_mask,
             'custom_fragments': custom_fragments,
             'histogram_quantiles': histogram_quantiles,
             'discrete_queue': discrete_queue,
