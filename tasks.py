@@ -12,6 +12,14 @@ def set_base_dir(d):
     global base_dir
     base_dir = d
 
+class RunTasks(luigi.WrapperTask):
+    '''Top-level task to run several tasks.'''
+
+    tasks = luigi.Parameter()
+
+    def requires(self):
+        return self.tasks
+
 class TrainTask(luigi.Task):
 
     experiment = luigi.Parameter()
@@ -75,7 +83,7 @@ class ProcessTask(luigi.Task):
             from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
-class EvaluateTask(luigi.Task):
+class Evaluate(luigi.Task):
 
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
@@ -88,6 +96,7 @@ class EvaluateTask(luigi.Task):
     histogram_quantiles = luigi.BoolParameter()
     discrete_queue = luigi.BoolParameter()
     merge_function = luigi.Parameter()
+    dilate_mask = luigi.IntParameter(default=0)
 
     keep_segmentation = luigi.BoolParameter()
 
@@ -120,6 +129,8 @@ class EvaluateTask(luigi.Task):
             tag += '_hq'
         if self.discrete_queue:
             tag += '_dq'
+        if self.dilate_mask != 0:
+            tag += '_dm%d'%self.dilate_mask
         if self.augmentation is not None:
             tag += '_au%d'%self.augmentation
         return tag
@@ -143,9 +154,10 @@ class EvaluateTask(luigi.Task):
         return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
 
     def output(self):
-        json_targets = [ JsonTarget(self.output_basename(t) + '.json', 'tag', self.tag) for t in self.thresholds ]
+        targets = [ JsonTarget(self.output_basename(t) + '.json', 'setup', self.get_setup()) for t in self.thresholds ]
         if self.keep_segmentation:
-            segmentation_targets = [ FileTarget(self.output_basename(t) + '.hdf') for t in self.thresholds ]
+            targets += [ FileTarget(self.output_basename(t) + '.hdf') for t in self.thresholds ]
+        return targets
 
     def run(self):
         with RedirectOutput(self.output_basename() + '.out', self.output_basename() + '.err'):
@@ -161,9 +173,10 @@ class EvaluateTask(luigi.Task):
                     histogram_quantiles=self.histogram_quantiles,
                     discrete_queue=self.discrete_queue,
                     merge_function=self.merge_function,
+                    dilate_mask=self.dilate_mask,
                     keep_segmentation=self.keep_segmentation)
 
-class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
+class EvaluateIteration(luigi.task.WrapperTask):
 
     setup = luigi.Parameter()
     iteration = luigi.Parameter()
@@ -185,7 +198,7 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
     def requires(self):
 
         return [
-            EvaluateTask(
+            Evaluate(
                 setup=self.setup,
                 iteration=self.iteration,
                 sample=sample,
@@ -195,7 +208,7 @@ class EvaluateCompleteSetupIteration(luigi.task.WrapperTask):
             for augmentation in self.augmentations
         ]
 
-class EvaluateCompleteSetup(luigi.task.WrapperTask):
+class EvaluateSetup(luigi.task.WrapperTask):
 
     setup = luigi.Parameter()
     iterations = luigi.Parameter()
@@ -206,7 +219,7 @@ class EvaluateCompleteSetup(luigi.task.WrapperTask):
     def requires(self):
 
         return [
-            EvaluateCompleteSetupIteration(
+            EvaluateIteration(
                 setup=self.setup,
                 iteration=iteration,
                 samples=self.samples,
@@ -215,7 +228,7 @@ class EvaluateCompleteSetup(luigi.task.WrapperTask):
             for iteration in self.iterations
         ]
 
-class EvaluateAll(luigi.task.WrapperTask):
+class EvaluateConfiguration(luigi.task.WrapperTask):
 
     setups = luigi.Parameter()
     iterations = luigi.Parameter()
@@ -226,7 +239,7 @@ class EvaluateAll(luigi.task.WrapperTask):
     def requires(self):
 
         return [
-            EvaluateCompleteSetup(
+            EvaluateSetup(
                 setup=setup,
                 iterations=self.iterations,
                 samples=self.samples,
