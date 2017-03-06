@@ -97,6 +97,7 @@ class Evaluate(luigi.Task):
     discrete_queue = luigi.BoolParameter()
     merge_function = luigi.Parameter()
     dilate_mask = luigi.IntParameter(default=0)
+    mask_fragments = luigi.IntParameter(default=False)
 
     keep_segmentation = luigi.BoolParameter()
 
@@ -131,6 +132,8 @@ class Evaluate(luigi.Task):
             tag += '_dq'
         if self.dilate_mask != 0:
             tag += '_dm%d'%self.dilate_mask
+        if self.mask_fragments:
+            tag += '_mf'
         if self.augmentation is not None:
             tag += '_au%d'%self.augmentation
         return tag
@@ -174,6 +177,7 @@ class Evaluate(luigi.Task):
                     discrete_queue=self.discrete_queue,
                     merge_function=self.merge_function,
                     dilate_mask=self.dilate_mask,
+                    mask_fragments=self.mask_fragments,
                     keep_segmentation=self.keep_segmentation)
 
 class EvaluateIteration(luigi.task.WrapperTask):

@@ -51,6 +51,7 @@ def evaluate(
         discrete_queue,
         merge_function = None,
         dilate_mask = 0,
+        mask_fragments = False,
         keep_segmentation = False):
 
     if isinstance(setup, int):
@@ -119,6 +120,10 @@ def evaluate(
 
     start = time.time()
 
+    fragments_mask = None
+    if mask_fragments:
+        fragments_mask = no_gt==False
+
     i = 0
     for seg_metric in agglomerate(
             affs,
@@ -127,7 +132,8 @@ def evaluate(
             custom_fragments=custom_fragments,
             histogram_quantiles=histogram_quantiles,
             discrete_queue=discrete_queue,
-            merge_function=merge_function):
+            merge_function=merge_function,
+            fragments_mask=fragments_mask):
 
         output_basename = output_basenames[i]
 
@@ -155,6 +161,7 @@ def evaluate(
             'threshold': threshold,
             'merge_function': merge_function,
             'dilate_mask': dilate_mask,
+            'mask_fragments': mask_fragments,
             'custom_fragments': custom_fragments,
             'histogram_quantiles': histogram_quantiles,
             'discrete_queue': discrete_queue,

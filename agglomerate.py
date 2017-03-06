@@ -9,11 +9,14 @@ def agglomerate(
         custom_fragments = False,
         histogram_quantiles = False,
         discrete_queue = False,
-        merge_function = None):
+        merge_function = None,
+        fragments_mask = None):
 
     fragments = None
     if custom_fragments:
         fragments = watershed(affs, 'maxima_distance')
+        if fragments_mask is not None:
+            fragments[fragments_mask==False] = 0
 
     if histogram_quantiles:
         merge_function += '_histograms'
