@@ -141,8 +141,12 @@ def evaluate(
 
             print "Storing segmentation..."
 
+            print("Storing segmentation...")
+            f = h5py.File(output_basename + '.hdf', 'w')
             seg = seg_metric[0]
-            h5py.File(output_basename + '.hdf', 'w')['main'] = seg
+            ds = f.create_dataset('main', seg.shape, compression="gzip")
+            ds[:] = seg
+            f.close()
 
         print "Storing record..."
 
