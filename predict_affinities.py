@@ -12,11 +12,14 @@ import json
 import numpy as np
 import os
 import time
+from data_io import OutOfCoreArray
+from data_io import OffsettedArray
+from data_io.out_of_core_arrays import H5PyArrayHandler
 
 model_base_folder = '../02_train/'
 output_base_folder = './processed/'
 
-def collect(dataset, sample_dir, sample, augmentations, in_memory = False):
+def collect(dataset, sample_dir, sample, augmentations, in_memory=False, chunk=None):
 
     for a in augmentations:
 
@@ -27,8 +30,11 @@ def collect(dataset, sample_dir, sample, augmentations, in_memory = False):
         filename = sample_dir + '/' + augmentation_name + '.hdf'
         print("Reading " + filename)
 
-        file = h5py.File(filename, 'r')
-        raw = file['volumes/raw']
+        raw_opener = H5PyArrayHandler(filename, 'volumes/raw', 'raw')
+        raw = OutOfCoreArray(raw_opener)
+
+        if chunk is not None:
+            raw = OffsettedArray(raw, chunk['offset'], chunk['size'])
 
         dataset.append({})
         dataset[-1]['name'] = augmentation_name
@@ -90,16 +96,14 @@ def process(modelpath,iter,outputpath,dset,normalize,divide,bigdata,test_device=
     outdset = outhdf5.create_dataset('main', preds[0].shape, np.float32, data=preds[0])
     outhdf5.close()
 
-def prepare_dataset(data_dir, samples, augmentations):
+def prepare_dataset(data_dir, samples, augmentations, chunk=None):
 
     print("Preparing dataset...")
 
     dataset = []
 
     for sample in samples:
-
-        # we get 'been waiting for <a long time>' if not in memory
-        collect(dataset, data_dir, sample, augmentations, in_memory=True)
+        collect(dataset, data_dir, sample, augmentations, in_memory=False, chunk=chunk)
 
     print("Dataset contains " + str(len(dataset)) + " volumes")
     for ds in dataset:
@@ -114,15 +118,16 @@ def is_testing_sample(sample):
     return False
 
 # to be called by luigi
-def predict_affinities(setup, iteration, sample, augmentation, gpu):
+def predict_affinities(setup, iteration, sample, augmentation, gpu, orig_data_dir=None, chunk=None):
 
     start = time.time()
-    if is_testing_sample(sample):
-        orig_data_dir = '../00_dataset_preparation/test/'
-    else:
-        with open(os.path.join('../02_train/', setup, 'train_options.json'), 'r') as f:
-            orig_data_dir = json.load(f)['data_dir']
-    test_dataset = prepare_dataset(orig_data_dir, [sample], [augmentation])
+    if orig_data_dir is None:
+        if is_testing_sample(sample):
+            orig_data_dir = '../00_dataset_preparation/test/'
+        else:
+            with open(os.path.join('../02_train/', setup, 'train_options.json'), 'r') as f:
+                orig_data_dir = json.load(f)['data_dir']
+    test_dataset = prepare_dataset(orig_data_dir, [sample], [augmentation], chunk=chunk)
     print("Loaded data in " + str(time.time()-start) + "s")
 
     folder = setup
