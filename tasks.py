@@ -83,6 +83,33 @@ class ProcessTask(luigi.Task):
             from predict_affinities import predict_affinities
             predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
 
+class ChunkProcessTask(luigi.Task):
+
+    experiment = luigi.Parameter()
+    setup = luigi.Parameter()
+    iteration = luigi.IntParameter()
+    sample = luigi.Parameter()
+    data_dir = luigi.Parameter()
+    chunk = luigi.Parameter()
+
+    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
+
+    def output_basename(self):
+        return os.path.join('.', 'processed', self.setup, str(self.iteration), '%s_%s_%s'%(self.sample,str(self.chunk['offset']),str(self.chunk['size'])))
+
+    def requires(self):
+        return TrainTask(self.experiment, self.setup, self.iteration)
+
+    def output(self):
+        return FileTarget(self.output_basename() + '.hdf')
+
+    def run(self):
+        log_base = self.output_basename()
+        with RedirectOutput(log_base + '.out', log_base + '.err'):
+            gpu = lock('gpu_{}'.format(socket.gethostname()))
+            from predict_affinities import predict_affinities
+            predict_affinities(self.setup, self.iteration, self.sample, augmentation=None, gpu=gpu.id, orig_data_dir=self.data_dir, chunk=self.chunk)
+
 class Evaluate(luigi.Task):
 
     setup = luigi.Parameter()
