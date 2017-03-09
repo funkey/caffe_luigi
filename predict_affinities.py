@@ -35,6 +35,7 @@ def collect(dataset, sample_dir, sample, augmentations, in_memory=False, chunk=N
 
         if chunk is not None:
             raw = OffsettedArray(raw, chunk['offset'], chunk['size'])
+            augmentation_name += '_%s_%s'%(str(chunk['offset']),str(chunk['size']))
 
         dataset.append({})
         dataset[-1]['name'] = augmentation_name
