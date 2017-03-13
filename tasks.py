@@ -3,6 +3,7 @@ import luigi
 import os
 import socket
 import sys
+import waterz
 from redirect_output import *
 from shared_resource import *
 from targets import *
@@ -153,6 +154,8 @@ class Evaluate(luigi.Task):
 
     def tag(self):
         tag = self.sample + '_' + self.merge_function
+        if waterz.__version__ != '0.6':
+            tag += '_' + waterz.__version__
         if self.custom_fragments:
             tag += '_cf'
         if self.histogram_quantiles:
