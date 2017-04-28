@@ -7,6 +7,7 @@ import waterz
 from redirect_output import *
 from shared_resource import *
 from targets import *
+from subprocess import call
 
 base_dir = '.'
 def set_base_dir(d):
@@ -46,8 +47,8 @@ class TrainTask(luigi.Task):
             gpu = lock('gpu_{}'.format(socket.gethostname()))
             os.chdir(os.path.join(base_dir, '02_train', self.setup))
             sys.path.append(os.getcwd())
-            from train_until import train_until
-            train_until(self.iteration, gpu.id)
+            print("Starting train task on GPU " + str(gpu.id))
+            call(['run_docker.sh', 'train_until.py', str(self.iteration), str(gpu.id)])
 
 class ProcessTask(luigi.Task):
 
