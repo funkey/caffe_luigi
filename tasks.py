@@ -45,9 +45,8 @@ class TrainTask(luigi.Task):
         log_base = os.path.join(base_dir, '02_train', str(self.setup), 'train_%d'%self.iteration)
         with RedirectOutput(log_base + '.out', log_base + '.err'):
             gpu = lock('gpu_{}'.format(socket.gethostname()))
-            os.chdir(os.path.join(base_dir, '02_train', self.setup))
-            sys.path.append(os.getcwd())
             print("Starting train task on GPU " + str(gpu.id))
+            os.chdir(os.path.join(base_dir, '02_train', self.setup))
             call(['run_docker.sh', 'train_until.py', str(self.iteration), str(gpu.id)])
 
 class ProcessTask(luigi.Task):
@@ -56,21 +55,11 @@ class ProcessTask(luigi.Task):
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
-    augmentation = luigi.Parameter()
 
     resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
-    def process_dir(self):
-        if '+' in self.sample:
-            return '04_process_testing'
-        else:
-            return '03_process_training'
-
     def output_filename(self):
-        self.augmentation_suffix = ''
-        if self.augmentation is not None:
-            self.augmentation_suffix = '.augmented.%d'%self.augmentation
-        return os.path.join(base_dir, self.process_dir(), 'processed', self.setup, str(self.iteration), '%s%s.hdf'%(self.sample,self.augmentation_suffix))
+        return os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s.hdf'%self.sample)
 
     def requires(self):
         return TrainTask(self.experiment, self.setup, self.iteration)
@@ -79,47 +68,18 @@ class ProcessTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
-        log_base = os.path.join(base_dir, self.process_dir(), 'processed', self.setup, str(self.iteration), '%s%s'%(self.sample,self.augmentation_suffix))
+        log_base = os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s'%self.sample)
         with RedirectOutput(log_base + '.out', log_base + '.err'):
             gpu = lock('gpu_{}'.format(socket.gethostname()))
-            from predict_affinities import predict_affinities
-            predict_affinities(self.setup, self.iteration, self.sample, self.augmentation, gpu=gpu.id)
-
-class ChunkProcessTask(luigi.Task):
-
-    experiment = luigi.Parameter()
-    setup = luigi.Parameter()
-    iteration = luigi.IntParameter()
-    sample = luigi.Parameter()
-    data_dir = luigi.Parameter()
-    chunk_offset = luigi.Parameter()
-    chunk_size = luigi.Parameter()
-
-    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
-
-    def output_basename(self):
-        return os.path.join('.', 'processed', self.setup, str(self.iteration), '%s_%s_%s'%(self.sample,str(self.chunk_offset),str(self.chunk_size)))
-
-    def requires(self):
-        return TrainTask(self.experiment, self.setup, self.iteration)
-
-    def output(self):
-        return FileTarget(self.output_basename() + '.hdf')
-
-    def run(self):
-        log_base = self.output_basename()
-        with RedirectOutput(log_base + '.out', log_base + '.err'):
-            gpu = lock('gpu_{}'.format(socket.gethostname()))
-            from predict_affinities import predict_affinities
-            chunk = { 'offset': self.chunk_offset, 'size': self.chunk_size }
-            predict_affinities(self.setup, self.iteration, self.sample, augmentation=None, gpu=gpu.id, orig_data_dir=self.data_dir, chunk=chunk)
+            print("Starting process task on GPU " + str(gpu.id))
+            os.chdir(os.path.join(base_dir, '03_process'))
+            call(['run_docker.sh', 'predict_affinities.py', self.setup, str(self.iteration), self.sample, str(gpu.id)])
 
 class Evaluate(luigi.Task):
 
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
-    augmentation = luigi.Parameter()
 
     experiment = luigi.Parameter()
     thresholds = luigi.Parameter()
@@ -147,12 +107,6 @@ class Evaluate(luigi.Task):
             self.iteration = max(iterations)
         return self.iteration
 
-    def process_dir(self):
-        if '+' in self.sample:
-            return '04_process_testing'
-        else:
-            return '03_process_training'
-
     def tag(self):
         tag = self.sample + '_' + self.merge_function
         if waterz.__version__ != '0.6':
@@ -167,8 +121,6 @@ class Evaluate(luigi.Task):
             tag += '_dm%d'%self.dilate_mask
         if self.mask_fragments:
             tag += '_mf'
-        if self.augmentation is not None:
-            tag += '_au%d'%self.augmentation
         return tag
 
     def output_basename(self, threshold=None):
@@ -180,14 +132,14 @@ class Evaluate(luigi.Task):
 
         return os.path.join(
                 base_dir,
-                self.process_dir(),
+                '03_process',
                 'processed',
                 self.get_setup(),
                 str(self.iteration),
                 basename)
 
     def requires(self):
-        return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample, self.augmentation)
+        return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample)
 
     def output(self):
         targets = [ JsonTarget(self.output_basename(t) + '.json', 'setup', self.get_setup()) for t in self.thresholds ]
@@ -202,7 +154,6 @@ class Evaluate(luigi.Task):
                     setup=self.setup,
                     iteration=self.iteration,
                     sample=self.sample,
-                    augmentation=self.augmentation,
                     thresholds=self.thresholds,
                     output_basenames=[self.output_basename(t) for t in self.thresholds],
                     custom_fragments=self.custom_fragments,
@@ -218,7 +169,6 @@ class EvaluateIteration(luigi.task.WrapperTask):
     setup = luigi.Parameter()
     iteration = luigi.Parameter()
     samples = luigi.Parameter()
-    augmentations = luigi.Parameter()
     parameters = luigi.Parameter()
 
     @property
@@ -239,10 +189,8 @@ class EvaluateIteration(luigi.task.WrapperTask):
                 setup=self.setup,
                 iteration=self.iteration,
                 sample=sample,
-                augmentation=augmentation,
                 **self.parameters)
             for sample in self.samples
-            for augmentation in self.augmentations
         ]
 
 class EvaluateSetup(luigi.task.WrapperTask):
@@ -250,7 +198,6 @@ class EvaluateSetup(luigi.task.WrapperTask):
     setup = luigi.Parameter()
     iterations = luigi.Parameter()
     samples = luigi.Parameter()
-    augmentations = luigi.Parameter()
     parameters = luigi.Parameter()
 
     def requires(self):
@@ -260,7 +207,6 @@ class EvaluateSetup(luigi.task.WrapperTask):
                 setup=self.setup,
                 iteration=iteration,
                 samples=self.samples,
-                augmentations=self.augmentations,
                 parameters=self.parameters)
             for iteration in self.iterations
         ]
@@ -270,7 +216,6 @@ class EvaluateConfiguration(luigi.task.WrapperTask):
     setups = luigi.Parameter()
     iterations = luigi.Parameter()
     samples = luigi.Parameter()
-    augmentations = luigi.Parameter()
     parameters = luigi.Parameter()
 
     def requires(self):
@@ -280,7 +225,6 @@ class EvaluateConfiguration(luigi.task.WrapperTask):
                 setup=setup,
                 iterations=self.iterations,
                 samples=self.samples,
-                augmentations=self.augmentations,
                 parameters=self.parameters)
             for setup in self.setups
         ]
