@@ -129,6 +129,9 @@ class Evaluate(luigi.Task):
     dilate_mask = luigi.IntParameter(default=0)
     mask_fragments = luigi.IntParameter(default=False)
 
+    aff_high = luigi.Parameter()
+    aff_low = luigi.Parameter()
+
     keep_segmentation = luigi.BoolParameter()
 
     resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
@@ -154,10 +157,12 @@ class Evaluate(luigi.Task):
 
     def tag(self):
         tag = self.sample + '_' + self.merge_function
-        if waterz.__version__ != '0.6':
+        if self.merge_function != 'zwatershed' and waterz.__version__ != '0.6':
             tag += '_' + waterz.__version__
         if self.custom_fragments:
             tag += '_cf'
+        elif self.merge_function == 'zwatershed': # only for 'zwatershed', for all other ones we use the default values
+            tag += '_ah%f_al%f'%(self.aff_high,self.aff_low)
         if self.histogram_quantiles:
             tag += '_hq'
         if self.discrete_queue:
@@ -210,7 +215,9 @@ class Evaluate(luigi.Task):
                     merge_function=self.merge_function,
                     dilate_mask=self.dilate_mask,
                     mask_fragments=self.mask_fragments,
-                    keep_segmentation=self.keep_segmentation)
+                    keep_segmentation=self.keep_segmentation,
+                    aff_high=self.aff_high,
+                    aff_low=self.aff_low)
 
 class EvaluateIteration(luigi.task.WrapperTask):
 
