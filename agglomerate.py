@@ -41,6 +41,7 @@ def agglomerate(
         histogram_quantiles = False,
         discrete_queue = False,
         merge_function = None,
+        init_with_max = True,
         fragments_mask = None,
         aff_high = 0.9999,
         aff_low = 0.0001):
@@ -53,6 +54,8 @@ def agglomerate(
             if fragments_mask is not None:
                 fragments[fragments_mask==False] = 0
 
+        if not init_with_max:
+            merge_function += '_quantinit'
         if histogram_quantiles:
             merge_function += '_histograms'
 

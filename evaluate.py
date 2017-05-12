@@ -50,6 +50,7 @@ def evaluate(
         histogram_quantiles,
         discrete_queue,
         merge_function = None,
+        init_with_max = True,
         dilate_mask = 0,
         mask_fragments = False,
         keep_segmentation = False,
@@ -135,6 +136,7 @@ def evaluate(
             histogram_quantiles=histogram_quantiles,
             discrete_queue=discrete_queue,
             merge_function=merge_function,
+            init_with_max=init_with_max,
             fragments_mask=fragments_mask,
             aff_high=aff_high,
             aff_low=aff_low):
