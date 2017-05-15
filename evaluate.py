@@ -170,6 +170,7 @@ def evaluate(
             'augmentation': augmentation,
             'threshold': threshold,
             'merge_function': merge_function,
+            'init_with_max': init_with_max,
             'aff_high': aff_high,
             'aff_low': aff_low,
             'dilate_mask': dilate_mask,
