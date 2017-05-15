@@ -87,8 +87,12 @@ class Evaluate(luigi.Task):
     histogram_quantiles = luigi.BoolParameter()
     discrete_queue = luigi.BoolParameter()
     merge_function = luigi.Parameter()
+    init_with_max = luigi.Parameter()
     dilate_mask = luigi.IntParameter(default=0)
     mask_fragments = luigi.IntParameter(default=False)
+
+    aff_high = luigi.Parameter()
+    aff_low = luigi.Parameter()
 
     keep_segmentation = luigi.BoolParameter()
 
@@ -109,10 +113,12 @@ class Evaluate(luigi.Task):
 
     def tag(self):
         tag = self.sample + '_' + self.merge_function
-        if waterz.__version__ != '0.6':
+        if self.merge_function != 'zwatershed' and waterz.__version__ != '0.6':
             tag += '_' + waterz.__version__
         if self.custom_fragments:
             tag += '_cf'
+        elif self.merge_function == 'zwatershed': # only for 'zwatershed', for all other ones we use the default values
+            tag += '_ah%f_al%f'%(self.aff_high,self.aff_low)
         if self.histogram_quantiles:
             tag += '_hq'
         if self.discrete_queue:
@@ -121,6 +127,8 @@ class Evaluate(luigi.Task):
             tag += '_dm%d'%self.dilate_mask
         if self.mask_fragments:
             tag += '_mf'
+        if self.init_with_max:
+            tag += '_im'
         return tag
 
     def output_basename(self, threshold=None):
@@ -160,9 +168,12 @@ class Evaluate(luigi.Task):
                     histogram_quantiles=self.histogram_quantiles,
                     discrete_queue=self.discrete_queue,
                     merge_function=self.merge_function,
+                    init_with_max=self.init_with_max,
                     dilate_mask=self.dilate_mask,
                     mask_fragments=self.mask_fragments,
-                    keep_segmentation=self.keep_segmentation)
+                    keep_segmentation=self.keep_segmentation,
+                    aff_high=self.aff_high,
+                    aff_low=self.aff_low)
 
 class EvaluateIteration(luigi.task.WrapperTask):
 

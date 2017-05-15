@@ -44,9 +44,12 @@ def evaluate(
         histogram_quantiles,
         discrete_queue,
         merge_function = None,
+        init_with_max = True,
         dilate_mask = 0,
         mask_fragments = False,
-        keep_segmentation = False):
+        keep_segmentation = False,
+        aff_high = 0.9999,
+        aff_low = 0.0001):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
@@ -138,7 +141,10 @@ def evaluate(
             histogram_quantiles=histogram_quantiles,
             discrete_queue=discrete_queue,
             merge_function=merge_function,
-            fragments_mask=fragments_mask):
+            init_with_max=init_with_max,
+            fragments_mask=fragments_mask,
+            aff_high=aff_high,
+            aff_low=aff_low):
 
         output_basename = output_basenames[i]
 
@@ -181,6 +187,8 @@ def evaluate(
             'sample': sample,
             'threshold': threshold,
             'merge_function': merge_function,
+            'aff_high': aff_high,
+            'aff_low': aff_low,
             'dilate_mask': dilate_mask,
             'mask_fragments': mask_fragments,
             'custom_fragments': custom_fragments,
