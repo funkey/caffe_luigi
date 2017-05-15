@@ -28,7 +28,7 @@ class TrainTask(luigi.Task):
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
 
-    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
+    # resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
     def output_filename(self):
         return os.path.join(base_dir, '02_train', str(self.setup), 'net_iter_%d.solverstate'%self.iteration)
@@ -44,10 +44,16 @@ class TrainTask(luigi.Task):
     def run(self):
         log_base = os.path.join(base_dir, '02_train', str(self.setup), 'train_%d'%self.iteration)
         with RedirectOutput(log_base + '.out', log_base + '.err'):
-            gpu = lock('gpu_{}'.format(socket.gethostname()))
-            print("Starting train task on GPU " + str(gpu.id))
+            # gpu = lock('gpu_{}'.format(socket.gethostname()))
+            # print("Starting train task on GPU " + str(gpu.id))
             os.chdir(os.path.join(base_dir, '02_train', self.setup))
-            call(['run_docker.sh', 'train_until.py', str(self.iteration), str(gpu.id)])
+            # call(['run_docker.sh', 'train_until.py', str(self.iteration), str(gpu.id)])
+            call([
+                'run_mesos.sh',
+                '-c', '10',
+                '-g', '1',
+                '-d', 'funkey/gunpowder:latest',
+                '-e', 'python -u train_until.py ' + str(self.iteration) + ' 0'])
 
 class ProcessTask(luigi.Task):
 
@@ -56,7 +62,7 @@ class ProcessTask(luigi.Task):
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
 
-    resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
+    # resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
     def output_filename(self):
         return os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s.hdf'%self.sample)
@@ -70,10 +76,17 @@ class ProcessTask(luigi.Task):
     def run(self):
         log_base = os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s'%self.sample)
         with RedirectOutput(log_base + '.out', log_base + '.err'):
-            gpu = lock('gpu_{}'.format(socket.gethostname()))
-            print("Starting process task on GPU " + str(gpu.id))
+            # gpu = lock('gpu_{}'.format(socket.gethostname()))
+            # print("Starting process task on GPU " + str(gpu.id))
             os.chdir(os.path.join(base_dir, '03_process'))
-            call(['run_docker.sh', 'predict_affinities.py', self.setup, str(self.iteration), self.sample, str(gpu.id)])
+            # call(['run_docker.sh', 'predict_affinities.py', self.setup, str(self.iteration), self.sample, str(gpu.id)])
+            call([
+                'run_mesos.sh',
+                '-c', '5',
+                '-g', '1',
+                '-d', 'funkey/gunpowder:latest',
+                '-e', 'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
+            ])
 
 class Evaluate(luigi.Task):
 
@@ -96,7 +109,7 @@ class Evaluate(luigi.Task):
 
     keep_segmentation = luigi.BoolParameter()
 
-    resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
+    # resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
     def get_setup(self):
         if isinstance(self.setup, int):
