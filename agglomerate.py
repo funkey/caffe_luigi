@@ -54,8 +54,8 @@ def agglomerate(
             if fragments_mask is not None:
                 fragments[fragments_mask==False] = 0
 
-        if not init_with_max:
-            merge_function += '_quantinit'
+        if init_with_max:
+            merge_function += '_maxinit'
         if histogram_quantiles:
             merge_function += '_histograms'
 
