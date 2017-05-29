@@ -43,17 +43,16 @@ class TrainTask(luigi.Task):
 
     def run(self):
         log_base = os.path.join(base_dir, '02_train', str(self.setup), 'train_%d'%self.iteration)
-        with RedirectOutput(log_base + '.out', log_base + '.err'):
-            # gpu = lock('gpu_{}'.format(socket.gethostname()))
-            # print("Starting train task on GPU " + str(gpu.id))
-            os.chdir(os.path.join(base_dir, '02_train', self.setup))
-            # call(['run_docker.sh', 'train_until.py', str(self.iteration), str(gpu.id)])
-            call([
-                'run_mesos.sh',
-                '-c', '10',
-                '-g', '1',
-                '-d', 'funkey/gunpowder:latest',
-                '-e', 'python -u train_until.py ' + str(self.iteration) + ' 0'])
+        log_out = log_base + '.out'
+        log_err = log_base + '.err'
+        os.chdir(os.path.join(base_dir, '02_train', self.setup))
+        call([
+            'run_mesos.sh',
+            '-c', '10',
+            '-g', '1',
+            '-d', 'funkey/gunpowder:latest',
+            '-e', 'python -u train_until.py ' + str(self.iteration) + ' 0 1>%s 2>%s'%(log_out,log_err)
+        ])
 
 class ProcessTask(luigi.Task):
 
@@ -75,18 +74,16 @@ class ProcessTask(luigi.Task):
 
     def run(self):
         log_base = os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s'%self.sample)
-        with RedirectOutput(log_base + '.out', log_base + '.err'):
-            # gpu = lock('gpu_{}'.format(socket.gethostname()))
-            # print("Starting process task on GPU " + str(gpu.id))
-            os.chdir(os.path.join(base_dir, '03_process'))
-            # call(['run_docker.sh', 'predict_affinities.py', self.setup, str(self.iteration), self.sample, str(gpu.id)])
-            call([
-                'run_mesos.sh',
-                '-c', '5',
-                '-g', '1',
-                '-d', 'funkey/gunpowder:latest',
-                '-e', 'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
-            ])
+        log_out = log_base + '.out'
+        log_err = log_base + '.err'
+        os.chdir(os.path.join(base_dir, '03_process'))
+        call([
+            'run_mesos.sh',
+            '-c', '5',
+            '-g', '1',
+            '-d', 'funkey/gunpowder:latest',
+            '-e', 'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0 1>%s 2>%s'%(log_out,log_err)
+        ])
 
 class Evaluate(luigi.Task):
 
