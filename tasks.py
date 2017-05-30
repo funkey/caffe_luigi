@@ -113,7 +113,7 @@ class Evaluate(luigi.Task):
 
     keep_segmentation = luigi.BoolParameter()
 
-    # resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
+    resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
     def get_setup(self):
         if isinstance(self.setup, int):
