@@ -14,6 +14,12 @@ def set_base_dir(d):
     global base_dir
     base_dir = d
 
+def mkdirs(path):
+    try:
+        os.makedirs(path)
+    except:
+        pass
+
 class RunTasks(luigi.WrapperTask):
     '''Top-level task to run several tasks.'''
 
@@ -73,6 +79,7 @@ class ProcessTask(luigi.Task):
         return FileTarget(self.output_filename())
 
     def run(self):
+        mkdirs(os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration)))
         log_base = os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s'%self.sample)
         log_out = log_base + '.out'
         log_err = log_base + '.err'
