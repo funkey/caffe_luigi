@@ -56,7 +56,7 @@ class TrainTask(luigi.Task):
             'run_mesos.sh',
             '-c', '10',
             '-g', '1',
-            '-d', 'funkey/gunpowder:latest',
+            '-d', 'funkey/gunpowder:v0.2-prerelease',
             '-e', 'python -u train_until.py ' + str(self.iteration) + ' 0 1>%s 2>%s'%(log_out,log_err)
         ])
 
@@ -88,7 +88,7 @@ class ProcessTask(luigi.Task):
             'run_mesos.sh',
             '-c', '5',
             '-g', '1',
-            '-d', 'funkey/gunpowder:latest',
+            '-d', 'funkey/gunpowder:v0.2-prerelease',
             '-e', 'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0 1>%s 2>%s'%(log_out,log_err)
         ])
 
