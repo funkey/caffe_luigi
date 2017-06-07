@@ -7,7 +7,7 @@ import waterz
 from redirect_output import *
 from shared_resource import *
 from targets import *
-from subprocess import call
+from subprocess import check_call
 
 base_dir = '.'
 def set_base_dir(d):
@@ -52,7 +52,7 @@ class TrainTask(luigi.Task):
         log_out = log_base + '.out'
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '02_train', self.setup))
-        call([
+        check_call([
             'run_mesos.sh',
             '-c', '10',
             '-g', '1',
@@ -84,7 +84,7 @@ class ProcessTask(luigi.Task):
         log_out = log_base + '.out'
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '03_process'))
-        call([
+        check_call([
             'run_mesos.sh',
             '-c', '5',
             '-g', '1',
