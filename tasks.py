@@ -53,11 +53,11 @@ class TrainTask(luigi.Task):
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '02_train', self.setup))
         check_call([
-            'run_mesos.sh',
+            'run_slurm',
             '-c', '1', # a shameless lie, just to get tasks running
             '-g', '1',
             '-d', 'funkey/gunpowder:v0.2-prerelease',
-            '-e', 'python -u train_until.py ' + str(self.iteration) + ' 0 1>%s 2>%s'%(log_out,log_err)
+            'python -u train_until.py ' + str(self.iteration) + ' 0 1>%s 2>%s'%(log_out,log_err)
         ])
 
 class ProcessTask(luigi.Task):
@@ -85,11 +85,11 @@ class ProcessTask(luigi.Task):
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '03_process'))
         check_call([
-            'run_mesos.sh',
+            'run_slurm',
             '-c', '1',
             '-g', '1',
             '-d', 'funkey/gunpowder:v0.2-prerelease',
-            '-e', 'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0 1>%s 2>%s'%(log_out,log_err)
+            'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0 1>%s 2>%s'%(log_out,log_err)
         ])
 
 class Evaluate(luigi.Task):
