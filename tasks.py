@@ -52,13 +52,15 @@ class TrainTask(luigi.Task):
         log_out = log_base + '.out'
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '02_train', self.setup))
-        check_call([
-            'run_slurm',
-            '-c', '1', # a shameless lie, just to get tasks running
-            '-g', '1',
-            '-d', 'funkey/gunpowder:v0.2-prerelease',
-            'python -u train_until.py ' + str(self.iteration) + ' 0 1>%s 2>%s'%(log_out,log_err)
-        ])
+        with open(log_out, 'w') as o:
+            with open(log_err, 'w') as e:
+                check_call([
+                    'run_slurm',
+                    '-c', '1', # a shameless lie, just to get tasks running
+                    '-g', '1',
+                    '-d', 'funkey/gunpowder:v0.2-prerelease',
+                    'python -u train_until.py ' + str(self.iteration) + ' 0'
+                ], stdout=o, stderr=e)
 
 class ProcessTask(luigi.Task):
 
@@ -84,13 +86,15 @@ class ProcessTask(luigi.Task):
         log_out = log_base + '.out'
         log_err = log_base + '.err'
         os.chdir(os.path.join(base_dir, '03_process'))
-        check_call([
-            'run_slurm',
-            '-c', '1',
-            '-g', '1',
-            '-d', 'funkey/gunpowder:v0.2-prerelease',
-            'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0 1>%s 2>%s'%(log_out,log_err)
-        ])
+        with open(log_out, 'w') as o:
+            with open(log_err, 'w') as e:
+                check_call([
+                    'run_slurm',
+                    '-c', '1',
+                    '-g', '1',
+                    '-d', 'funkey/gunpowder:v0.2-prerelease',
+                    'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
+                ], stdout=o, stderr=e)
 
 class Evaluate(luigi.Task):
 
