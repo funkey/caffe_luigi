@@ -56,7 +56,7 @@ class TrainTask(luigi.Task):
             with open(log_err, 'w') as e:
                 check_call([
                     'run_slurm',
-                    '-c', '5',
+                    '-c', '10',
                     '-g', '1',
                     '-d', 'funkey/gunpowder:v0.2-prerelease',
                     'python -u train_until.py ' + str(self.iteration) + ' 0'
