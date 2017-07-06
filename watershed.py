@@ -46,7 +46,6 @@ def watershed(affs, seed_method):
 
     next_id = 1
     for z in range(depth):
-        print z
 
         seeds, num_seeds = get_seeds(affs_xy[z], next_id=next_id, method=seed_method)
 

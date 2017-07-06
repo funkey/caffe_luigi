@@ -8,6 +8,7 @@ import time
 import waterz
 from agglomerate import agglomerate
 from roi import Roi
+from coordinate import Coordinate
 
 # in nm, equivalent to CREMI metric
 neuron_ids_border_threshold = 25
@@ -31,7 +32,7 @@ def get_gt_roi(gt):
     fg_indices = np.where(gt <= np.uint64(-10))
     return Roi(
             (np.min(fg_indices[d]) for d in range(3)),
-            (np.max(fg_indices[d]) - np.min(fg_indices[d]) for d in range(3))
+            (np.max(fg_indices[d])+1 - np.min(fg_indices[d]) for d in range(3))
     )
 
 def evaluate(
@@ -66,27 +67,32 @@ def evaluate(
     if 'resolution' not in h5py.File(gt_filename, 'r')['volumes/labels/neuron_ids'].attrs:
         print("WARNING: file " + gt_filename + " does not contain resolution attribute (I add it)")
         h5py.File(gt_filename, 'r+')['volumes/labels/neuron_ids'].attrs['resolution'] = (40,4,4)
-    truth = cremi.io.CremiFile(gt_filename, 'r')
-    gt_volume = truth.read_neuron_ids()
+    gt_file = cremi.io.CremiFile(gt_filename, 'r')
+    gt_volume = gt_file.read_neuron_ids()
+
+    resolution = Coordinate(gt_volume.resolution)
+
+    # we have a "GT data ROI" of the whole GT volume, and a "GT ROI" in which 
+    # tightly fits the non-background parts
+    gt_data_offset_nm = Coordinate(gt_volume.offset)
+    gt_data_roi = Roi(gt_data_offset_nm/resolution, gt_volume.data.shape)
 
     print "Getting ground-truth bounding box..."
     gt_roi = get_gt_roi(gt_volume.data)
-    print "GT ROI: " + str(gt_roi)
+    gt_roi = gt_roi.shift(gt_data_roi.get_offset())
+    print "GT data ROI : " + str(gt_data_roi)
+    print "GT ROI (>=0): " + str(gt_roi)
 
     print "Reading affinities..."
     affs_file = h5py.File(affs_filename, 'r')
     affs = affs_file['volumes/predicted_affs']
-    affs_roi = Roi(
-            affs_file['volumes/predicted_affs'].attrs['offset'],
-            affs.shape[1:]
-    )
-    print "affs ROI: " + str(affs_roi)
+    affs_data_offset_nm = Coordinate(affs_file['volumes/predicted_affs'].attrs['offset'])
+    affs_data_roi = Roi(affs_data_offset_nm/resolution, affs.shape[1:])
+    print "affs data ROI: " + str(affs_data_roi)
 
-    assert affs_roi.contains(gt_roi), "Predicted affinities do not contain GT region"
-
-    common_roi = gt_roi.intersect(affs_roi)
-    common_roi_in_gt   = common_roi
-    common_roi_in_affs = common_roi - affs_roi.get_offset()
+    common_roi = gt_roi.intersect(affs_data_roi)
+    common_roi_in_gt   = common_roi - gt_data_roi.get_offset()
+    common_roi_in_affs = common_roi - affs_data_roi.get_offset()
 
     print "Common ROI of GT and affs is " + str(common_roi)
     print "Common ROI in GT: " + str(common_roi_in_gt)
@@ -94,23 +100,23 @@ def evaluate(
 
     print "Cropping ground-truth to common ROI"
     print "Previous shape: " + str(gt_volume.data.shape)
-    gt_volume.data = gt_volume.data[common_roi_in_gt.get_bounding_box()]
-    print "New shape: " + str(gt_volume.data.shape)
+    gt = gt_volume.data[common_roi_in_gt.get_bounding_box()]
+    gt_volume.data = gt
+    gt_file.close()
+    print "New shape: " + str(gt.shape)
 
     print "Cropping affinities to common ROI"
-    affs = np.array(affs[(slice(None),) + common_roi_in_affs.get_bounding_box()])
+    affs = np.array(affs[(slice(None),) + common_roi_in_affs.get_bounding_box()], dtype=np.float32)
     affs_file.close()
 
     print "Growing ground-truth boundary..."
-    no_gt = gt_volume.data>=np.uint64(-10)
-    gt_volume.data[no_gt] = -1
+    no_gt = gt>=np.uint64(-10)
+    gt[no_gt] = -1
 
-    print no_gt
+    assert affs.shape[1:] == gt.shape
+    assert no_gt.shape == gt.shape
 
-    assert affs.shape[1:] == gt_volume.data.shape
-    assert no_gt.shape == gt_volume.data.shape
-
-    print("GT min/max: " + str(gt_volume.data.min()) + "/" + str(gt_volume.data.max()))
+    print("GT min/max: " + str(gt.min()) + "/" + str(gt.max()))
     evaluate = cremi.evaluation.NeuronIds(gt_volume, border_threshold=neuron_ids_border_threshold)
     gt_with_borders = np.array(evaluate.gt, dtype=np.uint32)
     print("GT with border min/max: " + str(gt_with_borders.min()) + "/" + str(gt_with_borders.max()))
@@ -120,7 +126,7 @@ def evaluate(
         # in fact, we erode the no-GT mask
         no_gt = binary_erosion(no_gt, iterations=dilate_mask, border_value=True)
 
-    assert no_gt.shape == gt_volume.data.shape
+    assert no_gt.shape == gt.shape
 
     print "Masking affinities outside ground-truth..."
     for d in range(3):
@@ -153,23 +159,17 @@ def evaluate(
             print "Storing segmentation..."
             f = h5py.File(output_basename + '.hdf', 'w')
             seg = seg_metric[0]
+
             ds = f.create_dataset('volumes/labels/neuron_ids', seg.shape, compression="gzip", dtype=np.uint64)
             ds[:] = seg
-            ds.attrs['offset'] = common_roi.get_offset()
-            ds.attrs['resolution'] = (40.0,4.0,4.0)
-            # ds = f.create_dataset('volumes/affs', affs.shape)
-            # ds[:] = affs
-            # ds.attrs['offset'] = common_roi.get_offset()
-            # ds.attrs['resolution'] = (40.0,4.0,4.0)
-            # ds = f.create_dataset('volumes/labels/gt', gt_with_borders.shape, compression="gzip", dtype=np.uint64)
-            # ds[:] = gt_with_borders
-            # ds.attrs['offset'] = common_roi.get_offset()
-            # ds.attrs['resolution'] = (40.0,4.0,4.0)
-            # if fragments_mask is not None:
-                # ds = f.create_dataset('volumes/labels/fragments_mask', fragments_mask.shape)
-                # ds[:] = fragments_mask
-                # ds.attrs['offset'] = common_roi.get_offset()
-                # ds.attrs['resolution'] = (40.0,4.0,4.0)
+            ds.attrs['offset'] = common_roi.get_offset()*resolution
+            ds.attrs['resolution'] = resolution
+
+            ds = f.create_dataset('volumes/labels/gt_neuron_ids', gt_with_borders.shape, compression="gzip", dtype=np.uint64)
+            ds[:] = gt_with_borders
+            ds.attrs['offset'] = common_roi.get_offset()*resolution
+            ds.attrs['resolution'] = resolution
+
             f.close()
 
         print "Storing record..."
@@ -177,9 +177,6 @@ def evaluate(
         metrics = seg_metric[1]
         threshold = thresholds[i]
         i += 1
-
-        print seg_metric
-        print metrics
 
         record = {
             'setup': setup,
@@ -208,5 +205,27 @@ def evaluate(
         with open(output_basename + '.json', 'w') as f:
             json.dump(record, f)
 
-
     print "Finished waterz in " + str(time.time() - start) + "s"
+
+if __name__ == "__main__":
+
+    evaluate(
+        'setup81',
+        200000,
+        'sample_C_padded_20160501.aligned.filled.cropped.62:153',
+        [0,0.5,0.9],
+        [
+            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0',
+            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0.5',
+            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0.9',
+        ],
+        custom_fragments=True,
+        histogram_quantiles=True,
+        discrete_queue=True,
+        merge_function = 'median_aff',
+        init_with_max = True,
+        dilate_mask = 1,
+        mask_fragments = True,
+        keep_segmentation = True,
+        aff_high = 0.9999,
+        aff_low = 0.0001)

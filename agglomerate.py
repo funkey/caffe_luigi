@@ -50,6 +50,7 @@ def agglomerate(
 
         fragments = None
         if custom_fragments:
+            print("Extracting custom fragments...")
             fragments = watershed(affs, 'maxima_distance')
             if fragments_mask is not None:
                 fragments[fragments_mask==False] = 0

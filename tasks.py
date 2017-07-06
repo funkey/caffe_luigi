@@ -90,9 +90,9 @@ class ProcessTask(luigi.Task):
             with open(log_err, 'w') as e:
                 check_call([
                     'run_slurm',
-                    '-c', '1',
+                    '-c', '2',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.2-prerelease',
+                    '-d', 'funkey/gunpowder:v0.2',
                     'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
                 ], stdout=o, stderr=e)
 
