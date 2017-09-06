@@ -58,7 +58,7 @@ class TrainTask(luigi.Task):
                     'run_slurm',
                     '-c', '10',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.2-prerelease',
+                    '-d', 'funkey/gunpowder:v0.3-pre3',
                     'python -u train_until.py ' + str(self.iteration) + ' 0'
                 ], stdout=o, stderr=e)
 
@@ -92,7 +92,7 @@ class ProcessTask(luigi.Task):
                     'run_slurm',
                     '-c', '2',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.2',
+                    '-d', 'funkey/gunpowder:v0.3-pre3',
                     'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
                 ], stdout=o, stderr=e)
 
