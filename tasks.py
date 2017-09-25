@@ -34,8 +34,6 @@ class TrainTask(luigi.Task):
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
 
-    # resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
-
     def output_filename(self):
         return os.path.join(base_dir, '02_train', str(self.setup), 'net_iter_%d.solverstate'%self.iteration)
 
@@ -58,7 +56,7 @@ class TrainTask(luigi.Task):
                     'run_slurm',
                     '-c', '10',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.3-pre3',
+                    '-d', 'funkey/gunpowder:v0.3-pre4',
                     'python -u train_until.py ' + str(self.iteration) + ' 0'
                 ], stdout=o, stderr=e)
 
@@ -68,8 +66,6 @@ class ProcessTask(luigi.Task):
     setup = luigi.Parameter()
     iteration = luigi.IntParameter()
     sample = luigi.Parameter()
-
-    # resources = { 'gpu_{}'.format(socket.gethostname()) :1 }
 
     def output_filename(self):
         return os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration), '%s.hdf'%self.sample)
@@ -92,7 +88,7 @@ class ProcessTask(luigi.Task):
                     'run_slurm',
                     '-c', '2',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.3-pre3',
+                    '-d', 'funkey/gunpowder:v0.3-pre4',
                     'python -u predict_affinities.py ' + self.setup + ' ' + str(self.iteration) + ' ' + self.sample + ' 0'
                 ], stdout=o, stderr=e)
 
@@ -116,8 +112,6 @@ class Evaluate(luigi.Task):
     aff_low = luigi.Parameter()
 
     keep_segmentation = luigi.BoolParameter()
-
-    resources = { 'segment_task_count_{}'.format(socket.gethostname()) :1 }
 
     def get_setup(self):
         if isinstance(self.setup, int):
