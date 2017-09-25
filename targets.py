@@ -10,7 +10,7 @@ class FileTarget(luigi.Target):
 
     def exists(self):
         isfile = os.path.isfile(self.filename)
-        print "FileTarget %s: "%self.filename + str(isfile)
+        # print "FileTarget %s: "%self.filename + str(isfile)
         return isfile
 
 class HdfAttributeTarget(luigi.Target):
@@ -37,17 +37,17 @@ class JsonTarget(luigi.Target):
         self.value = value
 
     def exists(self):
-        print "Looking for %s:%s in %s"%(self.key,self.value,self.filename)
+        # print "Looking for %s:%s in %s"%(self.key,self.value,self.filename)
         if not os.path.isfile(self.filename):
-            print "%s does not exist"%self.filename
+            # print "%s does not exist"%self.filename
             return False
         try:
             with open(self.filename) as f:
                 d = json.load(f)
                 if not self.key in d:
-                    print "no key %s"%self.key
+                    # print "no key %s"%self.key
                     return False
-                print "%s == %s?"%(self.value,d[self.key])
+                # print "%s == %s?"%(self.value,d[self.key])
                 return self.value == d[self.key]
         except:
             return False
