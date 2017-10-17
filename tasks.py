@@ -4,6 +4,8 @@ import os
 import socket
 import sys
 import waterz
+import itertools
+import json
 from redirect_output import *
 from shared_resource import *
 from targets import *
@@ -99,55 +101,33 @@ class ProcessTask(luigi.Task):
 
 class Evaluate(luigi.Task):
 
-    setup = luigi.Parameter()
-    iteration = luigi.IntParameter()
-    sample = luigi.Parameter()
-
-    experiment = luigi.Parameter()
-    thresholds = luigi.Parameter()
-    custom_fragments = luigi.BoolParameter()
-    histogram_quantiles = luigi.BoolParameter()
-    discrete_queue = luigi.BoolParameter()
-    merge_function = luigi.Parameter()
-    init_with_max = luigi.Parameter()
-    dilate_mask = luigi.IntParameter(default=0)
-    mask_fragments = luigi.IntParameter(default=False)
-
-    aff_high = luigi.Parameter()
-    aff_low = luigi.Parameter()
-
-    keep_segmentation = luigi.BoolParameter()
+    parameters = luigi.DictParameter()
 
     def get_setup(self):
-        if isinstance(self.setup, int):
-            return 'setup%02d'%self.setup
-        return self.setup
+        if isinstance(self.parameters['setup'], int):
+            return 'setup%02d'%self.parameters['setup']
+        return self.parameters['setup']
 
     def get_iteration(self):
-        if self.iteration == -1:
-            # take the most recent iteration
-            modelfiles = glob.glob(os.path.join(base_dir, '02_train', str(self.get_setup()), 'net_iter_*.solverstate'))
-            iterations = [ int(modelfile.split('_')[-1].split('.')[0]) for modelfile in modelfiles ]
-            self.iteration = max(iterations)
-        return self.iteration
+        return self.parameters['iteration']
 
     def tag(self):
-        tag = self.sample + '_' + self.merge_function
-        if self.merge_function != 'zwatershed' and waterz.__version__ != '0.6':
+        tag = self.parameters['sample'] + '_' + self.parameters['merge_function']
+        if self.parameters['merge_function'] != 'zwatershed' and waterz.__version__ != '0.6':
             tag += '_' + waterz.__version__
-        if self.custom_fragments:
+        if self.parameters['custom_fragments']:
             tag += '_cf'
-        elif self.merge_function == 'zwatershed': # only for 'zwatershed', for all other ones we use the default values
-            tag += '_ah%f_al%f'%(self.aff_high,self.aff_low)
-        if self.histogram_quantiles:
+        elif self.parameters['merge_function'] == 'zwatershed': # only for 'zwatershed', for all other ones we use the default values
+            tag += '_ah%f_al%f'%(self.parameters['aff_high'],self.parameters['aff_low'])
+        if self.parameters['histogram_quantiles']:
             tag += '_hq'
-        if self.discrete_queue:
+        if self.parameters['discrete_queue']:
             tag += '_dq'
-        if self.dilate_mask != 0:
-            tag += '_dm%d'%self.dilate_mask
-        if self.mask_fragments:
+        if self.parameters['dilate_mask'] != 0:
+            tag += '_dm%d'%self.parameters['dilate_mask']
+        if self.parameters['mask_fragments']:
             tag += '_mf'
-        if self.init_with_max:
+        if self.parameters['init_with_max']:
             tag += '_im'
         return tag
 
@@ -163,99 +143,85 @@ class Evaluate(luigi.Task):
                 '03_process',
                 'processed',
                 self.get_setup(),
-                str(self.iteration),
+                str(self.get_iteration()),
                 basename)
 
     def requires(self):
-        return ProcessTask(self.experiment, self.get_setup(), self.get_iteration(), self.sample)
+        return ProcessTask(
+            self.parameters['experiment'],
+            self.get_setup(),
+            self.get_iteration(),
+            self.parameters['sample'])
 
     def output(self):
-        targets = [ JsonTarget(self.output_basename(t) + '.json', 'setup', self.get_setup()) for t in self.thresholds ]
-        if self.keep_segmentation:
-            targets += [ FileTarget(self.output_basename(t) + '.hdf') for t in self.thresholds ]
+
+        targets = [
+            JsonTarget(self.output_basename(t) + '.json', 'setup', self.get_setup())
+            for t in self.parameters['thresholds'] ]
+        if self.parameters['keep_segmentation']:
+            targets += [
+                FileTarget(self.output_basename(t) + '.hdf')
+                for t in self.parameters['thresholds'] ]
         return targets
 
     def run(self):
-        with RedirectOutput(self.output_basename() + '.out', self.output_basename() + '.err'):
-            from evaluate import evaluate
-            evaluate(
-                    setup=self.setup,
-                    iteration=self.iteration,
-                    sample=self.sample,
-                    thresholds=self.thresholds,
-                    output_basenames=[self.output_basename(t) for t in self.thresholds],
-                    custom_fragments=self.custom_fragments,
-                    histogram_quantiles=self.histogram_quantiles,
-                    discrete_queue=self.discrete_queue,
-                    merge_function=self.merge_function,
-                    init_with_max=self.init_with_max,
-                    dilate_mask=self.dilate_mask,
-                    mask_fragments=self.mask_fragments,
-                    keep_segmentation=self.keep_segmentation,
-                    aff_high=self.aff_high,
-                    aff_low=self.aff_low)
 
-class EvaluateIteration(luigi.task.WrapperTask):
+        # skip invalid configurations
+        if self.parameters['merge_function'] == 'mean_aff':
+            if self.parameters['init_with_max']:
+                return
+            if self.parameters['histogram_quantiles']:
+                return
 
-    setup = luigi.Parameter()
-    iteration = luigi.Parameter()
-    samples = luigi.Parameter()
-    parameters = luigi.Parameter()
+        log_out = self.output_basename() + '.out'
+        log_err = self.output_basename() + '.err'
+        args = dict(self.parameters)
+        args['output_basenames'] = [
+            self.output_basename(t)
+            for t in self.parameters['thresholds']]
+        with open(self.output_basename() + '_config.json', 'w') as f:
+            json.dump(args, f)
+        os.chdir(os.path.join(base_dir, 'src', 'caffe_luigi'))
+        with open(log_out, 'w') as o:
+            with open(log_err, 'w') as e:
+                check_call([
+                    'run_slurm',
+                    '-c', '2',
+                    '-m', '100000',
+                    '-d', 'funkey/mala:v0.1-pre1',
+                    'python -u evaluate.py ' + self.output_basename() + '_config.json'
+                ], stdout=o, stderr=e)
 
-    @property
-    def priority(self):
-        # process largely spaced iterations first
-        if self.iteration % 100000 == 0:
-            return 10
-        elif self.iteration % 50000 == 0:
-            return 5
-        elif self.iteration % 10000 == 0:
-            return 3
-        return 0
+class EvaluateCombinations(luigi.task.WrapperTask):
+
+    # a dictionary containing lists of parameters to evaluate
+    parameters = luigi.DictParameter()
+    range_keys = luigi.ListParameter()
 
     def requires(self):
 
-        return [
-            Evaluate(
-                setup=self.setup,
-                iteration=self.iteration,
-                sample=sample,
-                **self.parameters)
-            for sample in self.samples
-        ]
+        for k in self.range_keys:
+            assert len(k) > 0 and k[-1] == 's', ("Explode keys have to end in "
+                                                 "a plural 's'")
 
-class EvaluateSetup(luigi.task.WrapperTask):
+        # get all the values to explode
+        range_values = {
+            k[:-1]: v
+            for k, v in self.parameters.iteritems()
+            if k in self.range_keys }
 
-    setup = luigi.Parameter()
-    iterations = luigi.Parameter()
-    samples = luigi.Parameter()
-    parameters = luigi.Parameter()
+        other_values = {
+            k: v
+            for k, v in self.parameters.iteritems()
+            if k not in self.range_keys }
 
-    def requires(self):
+        range_keys = range_values.keys()
+        tasks = []
+        for concrete_values in itertools.product(*list(range_values.values())):
 
-        return [
-            EvaluateIteration(
-                setup=self.setup,
-                iteration=iteration,
-                samples=self.samples,
-                parameters=self.parameters)
-            for iteration in self.iterations
-        ]
+            parameters = { k: v for k, v in zip(range_keys, concrete_values) }
+            parameters.update(other_values)
 
-class EvaluateConfiguration(luigi.task.WrapperTask):
+            tasks.append(Evaluate(parameters))
 
-    setups = luigi.Parameter()
-    iterations = luigi.Parameter()
-    samples = luigi.Parameter()
-    parameters = luigi.Parameter()
-
-    def requires(self):
-
-        return [
-            EvaluateSetup(
-                setup=setup,
-                iterations=self.iterations,
-                samples=self.samples,
-                parameters=self.parameters)
-            for setup in self.setups
-        ]
+        return tasks

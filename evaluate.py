@@ -6,6 +6,7 @@ from scipy.ndimage import binary_erosion
 import os
 import time
 import waterz
+import sys
 from agglomerate import agglomerate
 from roi import Roi
 from coordinate import Coordinate
@@ -50,7 +51,9 @@ def evaluate(
         mask_fragments = False,
         keep_segmentation = False,
         aff_high = 0.9999,
-        aff_low = 0.0001):
+        aff_low = 0.0001,
+        *args,
+        **kwargs):
 
     if isinstance(setup, int):
         setup = 'setup%02d'%setup
@@ -209,23 +212,7 @@ def evaluate(
 
 if __name__ == "__main__":
 
-    evaluate(
-        'setup81',
-        200000,
-        'sample_C_padded_20160501.aligned.filled.cropped.62:153',
-        [0,0.5,0.9],
-        [
-            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0',
-            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0.5',
-            'sample_C_padded_20160501.aligned.filled.cropped.62:153_75_aff_0.8_cf_hq_dq_dm1_mf0.9',
-        ],
-        custom_fragments=True,
-        histogram_quantiles=True,
-        discrete_queue=True,
-        merge_function = 'median_aff',
-        init_with_max = True,
-        dilate_mask = 1,
-        mask_fragments = True,
-        keep_segmentation = True,
-        aff_high = 0.9999,
-        aff_low = 0.0001)
+    args_file = sys.argv[1]
+    with open(args_file, 'r') as f:
+        args = json.load(f)
+    evaluate(**args)
