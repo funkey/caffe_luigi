@@ -35,7 +35,11 @@ class TrainTask(luigi.Task):
     iteration = luigi.IntParameter()
 
     def output_filename(self):
-        return os.path.join(base_dir, '02_train', str(self.setup), 'net_iter_%d.solverstate'%self.iteration)
+        return os.path.join(
+            base_dir,
+            '02_train',
+            str(self.setup),
+            'unet_checkpoint_%d.meta'%self.iteration)
 
     def requires(self):
         if self.iteration == 2000:
