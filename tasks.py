@@ -78,7 +78,7 @@ class ProcessTask(luigi.Task):
         return TrainTask(self.experiment, self.setup, self.iteration)
 
     def output(self):
-        return FileTarget(self.output_filename())
+        return HdfDatasetTarget(self.output_filename(), 'volumes/predicted_affs')
 
     def run(self):
         mkdirs(os.path.join(base_dir, '03_process', 'processed', self.setup, str(self.iteration)))

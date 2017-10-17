@@ -13,6 +13,21 @@ class FileTarget(luigi.Target):
         # print "FileTarget %s: "%self.filename + str(isfile)
         return isfile
 
+class HdfDatasetTarget(luigi.Target):
+
+    def __init__(self, filename, dataset):
+        self.filename = filename
+        self.dataset = dataset
+
+    def exists(self):
+        if not os.path.isfile(self.filename):
+            return False
+        try:
+            with h5py.File(self.filename, 'r') as f:
+                return self.dataset in f
+        except:
+            return False
+
 class HdfAttributeTarget(luigi.Target):
 
     def __init__(self, filename, dataset, attribute):
