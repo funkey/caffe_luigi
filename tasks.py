@@ -179,7 +179,7 @@ class Evaluate(luigi.Task):
         args['output_basenames'] = [
             self.output_basename(t)
             for t in self.parameters['thresholds']]
-        with open(self.output_basename() + '_config.json', 'w') as f:
+        with open(self.output_basename() + '.config', 'w') as f:
             json.dump(args, f)
         os.chdir(os.path.join(base_dir, 'src', 'caffe_luigi'))
         with open(log_out, 'w') as o:
@@ -189,7 +189,7 @@ class Evaluate(luigi.Task):
                     '-c', '2',
                     '-m', '100000',
                     '-d', 'funkey/mala:v0.1-pre1',
-                    'python -u evaluate.py ' + self.output_basename() + '_config.json'
+                    'python -u ../src/caffe_luigi/evaluate.py ' + self.output_basename() + '.config'
                 ], stdout=o, stderr=e)
 
 class EvaluateCombinations(luigi.task.WrapperTask):
