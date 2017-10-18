@@ -181,14 +181,12 @@ class Evaluate(luigi.Task):
             for t in self.parameters['thresholds']]
         with open(self.output_basename() + '.config', 'w') as f:
             json.dump(args, f)
-        os.chdir(os.path.join(base_dir, 'src', 'caffe_luigi'))
         with open(log_out, 'w') as o:
             with open(log_err, 'w') as e:
                 check_call([
                     'run_slurm',
                     '-c', '2',
                     '-m', '100000',
-                    '-d', 'funkey/mala:v0.1-pre1',
                     'python -u ../src/caffe_luigi/evaluate.py ' + self.output_basename() + '.config'
                 ], stdout=o, stderr=e)
 
