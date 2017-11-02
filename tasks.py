@@ -166,13 +166,6 @@ class Evaluate(luigi.Task):
 
     def run(self):
 
-        # skip invalid configurations
-        if self.parameters['merge_function'] == 'mean_aff':
-            if self.parameters['init_with_max']:
-                return
-            if self.parameters['histogram_quantiles']:
-                return
-
         log_out = self.output_basename() + '.out'
         log_err = self.output_basename() + '.err'
         args = dict(self.parameters)
@@ -219,6 +212,13 @@ class EvaluateCombinations(luigi.task.WrapperTask):
 
             parameters = { k: v for k, v in zip(range_keys, concrete_values) }
             parameters.update(other_values)
+
+            # skip invalid configurations
+            if parameters['merge_function'] == 'mean_aff':
+                if parameters['init_with_max']:
+                    continue
+                if parameters['histogram_quantiles']:
+                    continue
 
             tasks.append(Evaluate(parameters))
 
