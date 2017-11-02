@@ -62,7 +62,7 @@ class TrainTask(luigi.Task):
                     'run_slurm',
                     '-c', '10',
                     '-g', '1',
-                    '-d', 'funkey/gunpowder:v0.3-pre4',
+                    '-d', 'funkey/gunpowder:v0.3-pre5',
                     'python -u train_until.py ' + str(self.iteration) + ' 0'
                 ], stdout=o, stderr=e)
 
