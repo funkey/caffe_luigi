@@ -111,14 +111,14 @@ def evaluate(
     print "Cropping affinities to common ROI"
     affs = np.array(affs[(slice(None),) + common_roi_in_affs.get_bounding_box()], dtype=np.float32)
     affs_file.close()
+    assert affs.shape[1:] == gt.shape
 
-    print "Growing ground-truth boundary..."
-    no_gt = gt>=np.uint64(-10)
+    print "Setting all GT special labels to -1 (will be 0 later)"
+    no_gt = gt==np.uint64(-3)
+    artifact_mask = gt==np.uint64(-1)
     gt[no_gt] = -1
 
-    assert affs.shape[1:] == gt.shape
-    assert no_gt.shape == gt.shape
-
+    print "Growing ground-truth boundary..."
     print("GT min/max: " + str(gt.min()) + "/" + str(gt.max()))
     evaluate = cremi.evaluation.NeuronIds(gt_volume, border_threshold=neuron_ids_border_threshold)
     gt_with_borders = np.array(evaluate.gt, dtype=np.uint32)
@@ -129,8 +129,6 @@ def evaluate(
         # in fact, we erode the no-GT mask
         no_gt = binary_erosion(no_gt, iterations=dilate_mask, border_value=True)
 
-    assert no_gt.shape == gt.shape
-
     print "Masking affinities outside ground-truth..."
     for d in range(3):
         affs[d][no_gt] = 0
@@ -139,6 +137,7 @@ def evaluate(
 
     fragments_mask = None
     if mask_fragments:
+        print "Masking fragments outside ground-truth..."
         fragments_mask = no_gt==False
 
     i = 0
