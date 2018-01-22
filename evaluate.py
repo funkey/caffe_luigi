@@ -11,8 +11,8 @@ from agglomerate import agglomerate
 from roi import Roi
 from coordinate import Coordinate
 
-# in nm, equivalent to CREMI metric
-neuron_ids_border_threshold = 25
+# in voxel
+ids_border_threshold = 10
 
 def crop(a, bb):
 
@@ -67,11 +67,8 @@ def evaluate(
 
     print "Reading ground-truth..."
     gt_filename = os.path.join('../01_data', sample + '.hdf')
-    if 'resolution' not in h5py.File(gt_filename, 'r')['volumes/labels/neuron_ids'].attrs:
-        print("WARNING: file " + gt_filename + " does not contain resolution attribute (I add it)")
-        h5py.File(gt_filename, 'r+')['volumes/labels/neuron_ids'].attrs['resolution'] = (40,4,4)
     gt_file = cremi.io.CremiFile(gt_filename, 'r')
-    gt_volume = gt_file.read_neuron_ids()
+    gt_volume = gt_file.read_volume('volumes/labels/cells')
 
     resolution = Coordinate(gt_volume.resolution)
 
@@ -111,16 +108,16 @@ def evaluate(
     print "Cropping affinities to common ROI"
     affs = np.array(affs[(slice(None),) + common_roi_in_affs.get_bounding_box()], dtype=np.float32)
     affs_file.close()
+    assert affs.shape[1:] == gt.shape
 
-    print "Growing ground-truth boundary..."
-    no_gt = gt>=np.uint64(-10)
+    print "Setting all GT special labels to -1 (will be 0 later)"
+    no_gt = gt==np.uint64(-3)
+    artifact_mask = gt==np.uint64(-1)
     gt[no_gt] = -1
 
-    assert affs.shape[1:] == gt.shape
-    assert no_gt.shape == gt.shape
-
+    print "Growing ground-truth boundary..."
     print("GT min/max: " + str(gt.min()) + "/" + str(gt.max()))
-    evaluate = cremi.evaluation.NeuronIds(gt_volume, border_threshold=neuron_ids_border_threshold)
+    evaluate = cremi.evaluation.NeuronIds(gt_volume, border_threshold=ids_border_threshold)
     gt_with_borders = np.array(evaluate.gt, dtype=np.uint32)
     print("GT with border min/max: " + str(gt_with_borders.min()) + "/" + str(gt_with_borders.max()))
 
@@ -128,8 +125,6 @@ def evaluate(
         print "Dilating GT mask..."
         # in fact, we erode the no-GT mask
         no_gt = binary_erosion(no_gt, iterations=dilate_mask, border_value=True)
-
-    assert no_gt.shape == gt.shape
 
     print "Masking affinities outside ground-truth..."
     for d in range(3):
@@ -139,6 +134,7 @@ def evaluate(
 
     fragments_mask = None
     if mask_fragments:
+        print "Masking fragments outside ground-truth..."
         fragments_mask = no_gt==False
 
     i = 0
@@ -163,12 +159,12 @@ def evaluate(
             f = h5py.File(output_basename + '.hdf', 'w')
             seg = seg_metric[0]
 
-            ds = f.create_dataset('volumes/labels/neuron_ids', seg.shape, compression="gzip", dtype=np.uint64)
+            ds = f.create_dataset('volumes/labels/cells', seg.shape, compression="gzip", dtype=np.uint64)
             ds[:] = seg
             ds.attrs['offset'] = common_roi.get_offset()*resolution
             ds.attrs['resolution'] = resolution
 
-            ds = f.create_dataset('volumes/labels/gt_neuron_ids', gt_with_borders.shape, compression="gzip", dtype=np.uint64)
+            ds = f.create_dataset('volumes/labels/gt_cells', gt_with_borders.shape, compression="gzip", dtype=np.uint64)
             ds[:] = gt_with_borders
             ds.attrs['offset'] = common_roi.get_offset()*resolution
             ds.attrs['resolution'] = resolution
@@ -202,7 +198,7 @@ def evaluate(
             'voi_merge': metrics['V_Info_merge'],
             'rand_split': metrics['V_Rand_split'],
             'rand_merge': metrics['V_Rand_merge'],
-            'gt_border_threshold': neuron_ids_border_threshold,
+            'gt_border_threshold': ids_border_threshold,
             'waterz_version': waterz.__version__,
         }
         with open(output_basename + '.json', 'w') as f:
