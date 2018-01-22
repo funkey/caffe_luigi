@@ -158,6 +158,9 @@ class Evaluate(luigi.Task):
         targets = [
             JsonTarget(self.output_basename(t) + '.json', 'setup', self.get_setup())
             for t in self.parameters['thresholds'] ]
+        targets += [
+            FileTarget(self.output_basename(t) + '.merge_history.json')
+            for t in self.parameters['thresholds'] ]
         if self.parameters['keep_segmentation']:
             targets += [
                 FileTarget(self.output_basename(t) + '.hdf')

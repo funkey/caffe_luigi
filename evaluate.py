@@ -138,7 +138,7 @@ def evaluate(
         fragments_mask = no_gt==False
 
     i = 0
-    for seg_metric in agglomerate(
+    for seg_metric_history in agglomerate(
             affs,
             gt_with_borders,
             thresholds,
@@ -149,7 +149,8 @@ def evaluate(
             init_with_max=init_with_max,
             fragments_mask=fragments_mask,
             aff_high=aff_high,
-            aff_low=aff_low):
+            aff_low=aff_low,
+            return_merge_history=True):
 
         output_basename = output_basenames[i]
 
@@ -157,7 +158,7 @@ def evaluate(
 
             print "Storing segmentation..."
             f = h5py.File(output_basename + '.hdf', 'w')
-            seg = seg_metric[0]
+            seg = seg_metric_history[0]
 
             ds = f.create_dataset('volumes/labels/cells', seg.shape, compression="gzip", dtype=np.uint64)
             ds[:] = seg
@@ -173,7 +174,7 @@ def evaluate(
 
         print "Storing record..."
 
-        metrics = seg_metric[1]
+        metrics = seg_metric_history[1]
         threshold = thresholds[i]
         i += 1
 
@@ -203,6 +204,12 @@ def evaluate(
         }
         with open(output_basename + '.json', 'w') as f:
             json.dump(record, f)
+
+        print "Storing merge history..."
+
+        history = seg_metric_history[2]
+        with open(output_basename + '.merge_history.json', 'w') as f:
+            json.dump(history, f)
 
     print "Finished waterz in " + str(time.time() - start) + "s"
 

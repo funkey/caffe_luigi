@@ -44,7 +44,8 @@ def agglomerate(
         init_with_max = True,
         fragments_mask = None,
         aff_high = 0.9999,
-        aff_low = 0.0001):
+        aff_low = 0.0001,
+        return_merge_history=False):
 
     if merge_function is not 'zwatershed':
 
@@ -72,9 +73,12 @@ def agglomerate(
                 scoring_function=config.scoring_function[merge_function],
                 discretize_queue=discretize_queue,
                 aff_threshold_high=aff_high,
-                aff_threshold_low=aff_low)
+                aff_threshold_low=aff_low,
+                return_merge_history=return_merge_history)
 
     else:
+
+        assert return_merge_history is False, "can not return merge history from zwatershed"
 
         return zwatershed_thresholds(
                 affs,
