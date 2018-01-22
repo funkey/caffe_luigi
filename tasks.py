@@ -129,6 +129,8 @@ class Evaluate(luigi.Task):
             tag += '_mf'
         if self.parameters['init_with_max']:
             tag += '_im'
+        if self.parameters['section_wise']:
+            tag += '_sw'
         return tag
 
     def output_basename(self, threshold=None):

@@ -46,6 +46,7 @@ def evaluate(
         histogram_quantiles,
         discrete_queue,
         merge_function = None,
+        section_wise=False,
         init_with_max = True,
         dilate_mask = 0,
         mask_fragments = False,
@@ -129,6 +130,10 @@ def evaluate(
     print "Masking affinities outside ground-truth..."
     for d in range(3):
         affs[d][no_gt] = 0
+
+    if section_wise:
+        print "Setting affinties between sections to 0 (section-wise merging)"
+        affs[0] = 0
 
     start = time.time()
 
